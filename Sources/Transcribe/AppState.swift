@@ -206,7 +206,14 @@ final class AppState: ObservableObject {
         errorMessage = nil
         overlay?.reposition()
 
-        let client = TranscriptionClient(apiKey: apiKey, options: .fromPrefs())
+        var options = TranscriptionClient.Options.fromPrefs()
+        // Light per-app context: tell the model where the text is going so it
+        // can adapt jargon and tone (e.g. code in a terminal, prose in Mail).
+        if let frontApp = NSWorkspace.shared.frontmostApplication?.localizedName {
+            let context = "The user is dictating into the macOS app \"\(frontApp)\"."
+            options.prompt = options.prompt.isEmpty ? context : options.prompt + " " + context
+        }
+        let client = TranscriptionClient(apiKey: apiKey, options: options)
         self.client = client
 
         client.onReady = { [weak self] in
