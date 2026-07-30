@@ -63,6 +63,24 @@ private struct MenuContent: View {
 
         Divider()
 
+        if !app.history.isEmpty {
+            Menu("Recent Dictations") {
+                ForEach(app.history.prefix(10)) { record in
+                    Button(preview(of: record.text)) {
+                        let pasteboard = NSPasteboard.general
+                        pasteboard.clearContents()
+                        pasteboard.setString(record.text, forType: .string)
+                    }
+                }
+                Divider()
+                Button("Clear History") {
+                    app.clearHistory()
+                }
+            }
+
+            Divider()
+        }
+
         SettingsLink {
             Text("Settings…")
         }
@@ -74,5 +92,11 @@ private struct MenuContent: View {
             NSApp.terminate(nil)
         }
         .keyboardShortcut("q")
+    }
+
+    /// Single-line menu label; click copies the full text to the clipboard.
+    private func preview(of text: String) -> String {
+        let flattened = text.replacingOccurrences(of: "\n", with: " ")
+        return flattened.count > 45 ? String(flattened.prefix(45)) + "…" : flattened
     }
 }

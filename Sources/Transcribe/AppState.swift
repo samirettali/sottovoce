@@ -4,6 +4,12 @@ import Combine
 
 /// Central state machine. Everything here runs on the main thread: the hotkey
 /// tap lives on the main run loop, and audio/WebSocket callbacks hop to main.
+struct DictationRecord: Identifiable {
+    let id = UUID()
+    let text: String
+    let date: Date
+}
+
 final class AppState: ObservableObject {
     static let shared = AppState()
 
@@ -37,6 +43,9 @@ final class AppState: ObservableObject {
     @Published private(set) var recordingEndedAt: Date?
     @Published private(set) var capturingHotkey = false
     @Published private(set) var hotkeyName = ""
+    /// Last dictations, newest first. Kept in memory only — dictated text can
+    /// be sensitive, so it is never written to disk and vanishes on quit.
+    @Published private(set) var history: [DictationRecord] = []
     @Published var errorMessage: String?
 
     let hotkey = HotkeyManager()
@@ -259,9 +268,14 @@ final class AppState: ObservableObject {
     }
 
     private func completeFinish() {
-        let didInsert = !insertedText.isEmpty
+        let finalText = insertedText
+        let didInsert = !finalText.isEmpty
         teardownSession()
         if didInsert {
+            history.insert(DictationRecord(text: finalText, date: Date()), at: 0)
+            if history.count > 20 {
+                history.removeLast(history.count - 20)
+            }
             flashDone = true
             let work = DispatchWorkItem { [weak self] in self?.flashDone = false }
             flashWork = work
@@ -354,6 +368,10 @@ final class AppState: ObservableObject {
 
     private func updatePreview() {
         previewText = String((insertedText + deltaText).suffix(120))
+    }
+
+    func clearHistory() {
+        history.removeAll()
     }
 
     // MARK: - Errors
