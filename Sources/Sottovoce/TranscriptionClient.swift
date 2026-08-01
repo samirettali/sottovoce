@@ -2,7 +2,7 @@ import Foundation
 
 /// WebSocket client for an OpenAI Realtime transcription session
 /// running the gpt-live-transcribe model.
-final class TranscriptionClient: NSObject, URLSessionWebSocketDelegate {
+final class TranscriptionClient: NSObject, TranscriptionSession, URLSessionWebSocketDelegate {
     var onReady: (() -> Void)?
     var onDelta: ((String) -> Void)?
     var onCompleted: ((String) -> Void)?

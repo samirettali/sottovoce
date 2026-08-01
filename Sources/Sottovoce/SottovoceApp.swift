@@ -32,7 +32,7 @@ private struct MenuBarLabel: View {
         Image(systemName: app.phase.isRecording || app.phase == .finishing ? "waveform" : "mic")
             .onAppear {
                 // First run: take the user straight to setup.
-                if KeychainStore.loadAPIKey() == nil {
+                if KeychainStore.loadAPIKey(for: Prefs.provider) == nil {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         openSettings()
                         NSApp.activate(ignoringOtherApps: true)

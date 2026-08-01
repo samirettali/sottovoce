@@ -5,7 +5,36 @@ import Security
 
 // MARK: - Preferences
 
+enum TranscriptionProvider: String, CaseIterable, Identifiable {
+    case openai
+    case fishAudio
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .openai: return "OpenAI"
+        case .fishAudio: return "Fish Audio"
+        }
+    }
+
+    var menuLabel: String {
+        switch self {
+        case .openai: return "OpenAI — gpt-live-transcribe (live)"
+        case .fishAudio: return "Fish Audio — ASR (batch)"
+        }
+    }
+
+    var keychainAccount: String {
+        switch self {
+        case .openai: return "openai-api-key"
+        case .fishAudio: return "fishaudio-api-key"
+        }
+    }
+}
+
 enum PrefKey {
+    static let provider = "provider"
     static let hotkeyKeyCode = "hotkeyKeyCode"
     static let overlayPosition = "overlayPosition"
     static let showIdleOverlay = "showIdleOverlay"
@@ -91,6 +120,7 @@ enum Prefs {
 
     static func registerDefaults() {
         defaults.register(defaults: [
+            PrefKey.provider: TranscriptionProvider.openai.rawValue,
             PrefKey.hotkeyKeyCode: 61, // Right Option
             PrefKey.overlayPosition: OverlayPosition.bottomCenter.rawValue,
             PrefKey.showIdleOverlay: false,
@@ -102,6 +132,11 @@ enum Prefs {
             PrefKey.transcriptionKeywords: "",
             PrefKey.transcriptionDelay: "",
         ])
+    }
+
+    static var provider: TranscriptionProvider {
+        get { TranscriptionProvider(rawValue: defaults.string(forKey: PrefKey.provider) ?? "") ?? .openai }
+        set { defaults.set(newValue.rawValue, forKey: PrefKey.provider) }
     }
 
     static var hotkeyKeyCode: CGKeyCode {
@@ -173,18 +208,17 @@ enum Prefs {
 
 enum KeychainStore {
     private static let service = "dev.samir.sottovoce"
-    private static let account = "openai-api-key"
 
-    private static var baseQuery: [String: Any] {
+    private static func baseQuery(for provider: TranscriptionProvider) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
+            kSecAttrAccount as String: provider.keychainAccount,
         ]
     }
 
-    static func loadAPIKey() -> String? {
-        var query = baseQuery
+    static func loadAPIKey(for provider: TranscriptionProvider) -> String? {
+        var query = baseQuery(for: provider)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
@@ -196,23 +230,23 @@ enum KeychainStore {
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    static func saveAPIKey(_ key: String) {
+    static func saveAPIKey(_ key: String, for provider: TranscriptionProvider) {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            deleteAPIKey()
+            deleteAPIKey(for: provider)
             return
         }
         // Delete + add instead of update-in-place: recreating the item makes
         // the current app its owner, so reads never prompt. An update would
         // keep the ACL of whichever (possibly older-signed) build created it.
-        deleteAPIKey()
-        var query = baseQuery
+        deleteAPIKey(for: provider)
+        var query = baseQuery(for: provider)
         query[kSecValueData as String] = Data(trimmed.utf8)
         SecItemAdd(query as CFDictionary, nil)
     }
 
-    static func deleteAPIKey() {
-        SecItemDelete(baseQuery as CFDictionary)
+    static func deleteAPIKey(for provider: TranscriptionProvider) {
+        SecItemDelete(baseQuery(for: provider) as CFDictionary)
     }
 }
 

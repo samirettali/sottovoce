@@ -51,7 +51,7 @@ final class AppState: ObservableObject {
     let hotkey = HotkeyManager()
     private let audio = AudioCapture()
     private let mediaPauser = MediaPauser()
-    private var client: TranscriptionClient?
+    private var client: TranscriptionSession?
     private var overlay: OverlayController?
 
     private var keyDownTime: CFTimeInterval = 0
@@ -186,8 +186,9 @@ final class AppState: ObservableObject {
     // MARK: - Session lifecycle
 
     private func startSession() {
-        guard let apiKey = KeychainStore.loadAPIKey() else {
-            showError("Add your OpenAI API key in Settings (menu bar icon → Settings…).")
+        let provider = Prefs.provider
+        guard let apiKey = KeychainStore.loadAPIKey(for: provider) else {
+            showError("Add your \(provider.displayName) API key in Settings (menu bar icon → Settings…).")
             return
         }
         guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
@@ -206,14 +207,21 @@ final class AppState: ObservableObject {
         errorMessage = nil
         overlay?.reposition()
 
-        var options = TranscriptionClient.Options.fromPrefs()
-        // Light per-app context: tell the model where the text is going so it
-        // can adapt jargon and tone (e.g. code in a terminal, prose in Mail).
-        if let frontApp = NSWorkspace.shared.frontmostApplication?.localizedName {
-            let context = "The user is dictating into the macOS app \"\(frontApp)\"."
-            options.prompt = options.prompt.isEmpty ? context : options.prompt + " " + context
+        let client: TranscriptionSession
+        switch provider {
+        case .openai:
+            var options = TranscriptionClient.Options.fromPrefs()
+            // Light per-app context: tell the model where the text is going so
+            // it can adapt jargon and tone (e.g. code vs prose). OpenAI-only:
+            // Fish Audio's ASR endpoint has no prompt parameter.
+            if let frontApp = NSWorkspace.shared.frontmostApplication?.localizedName {
+                let context = "The user is dictating into the macOS app \"\(frontApp)\"."
+                options.prompt = options.prompt.isEmpty ? context : options.prompt + " " + context
+            }
+            client = TranscriptionClient(apiKey: apiKey, options: options)
+        case .fishAudio:
+            client = FishAudioClient(apiKey: apiKey, language: Prefs.languages.first)
         }
-        let client = TranscriptionClient(apiKey: apiKey, options: options)
         self.client = client
 
         client.onReady = { [weak self] in

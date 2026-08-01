@@ -35,6 +35,20 @@ shows the current mode.
 
 ## Non-obvious decisions
 
+- **Provider abstraction**: dictation goes through the `TranscriptionSession`
+  protocol with two families — *streaming* (OpenAI `TranscriptionClient`,
+  live deltas over WebSocket) and *batch* (`FishAudioClient`: PCM buffered in
+  memory, uploaded as one WAV to `POST https://api.fish.audio/v1/asr` on
+  stop; capped at 30 min). Fish Audio has **no realtime ASR** (their
+  streaming/WebSocket API is TTS-only, and `s2.1-pro` is a TTS model — not
+  usable for dictation; same for OpenRouter, which has no realtime STT at
+  all). Batch providers emit a single `onCompleted` at finish, so live-typing
+  insertion degrades gracefully to insert-on-stop. Per-provider API keys are
+  separate Keychain accounts (`openai-api-key`, `fishaudio-api-key`) under
+  the same service. Delay/keywords/context-prompt options are OpenAI-only;
+  `languages` applies to both (Fish takes a single `language` field, we pass
+  the first).
+
 - **Wire protocol** (docs pages are thin; assembled from the realtime
   transcription guide): WebSocket to
   `wss://api.openai.com/v1/realtime?intent=transcription` with

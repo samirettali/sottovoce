@@ -7,6 +7,7 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject private var app = AppState.shared
 
+    @AppStorage(PrefKey.provider) private var providerRaw = TranscriptionProvider.openai.rawValue
     @State private var apiKey = ""
     @State private var apiKeySaved = false
     @AppStorage(PrefKey.overlayPosition) private var positionRaw = OverlayPosition.bottomCenter.rawValue
@@ -42,7 +43,7 @@ struct SettingsView: View {
         }
         .frame(width: 440, height: 480)
         .onAppear {
-            apiKey = KeychainStore.loadAPIKey() ?? ""
+            apiKey = KeychainStore.loadAPIKey(for: provider) ?? ""
             apiKeySaved = !apiKey.isEmpty
             refreshPermissions()
         }
@@ -53,14 +54,31 @@ struct SettingsView: View {
 
     // MARK: Sections (shared by every variant)
 
+    private var provider: TranscriptionProvider {
+        TranscriptionProvider(rawValue: providerRaw) ?? .openai
+    }
+
     private var apiKeySection: some View {
         Section {
-            SecureField("API key", text: $apiKey, prompt: Text("sk-…"))
+            Picker("Provider", selection: $providerRaw) {
+                ForEach(TranscriptionProvider.allCases) { provider in
+                    Text(provider.menuLabel).tag(provider.rawValue)
+                }
+            }
+            .onChange(of: providerRaw) { _, newValue in
+                let newProvider = TranscriptionProvider(rawValue: newValue) ?? .openai
+                apiKey = KeychainStore.loadAPIKey(for: newProvider) ?? ""
+                apiKeySaved = !apiKey.isEmpty
+            }
+            SecureField("API key", text: $apiKey, prompt: Text(provider == .openai ? "sk-…" : "key…"))
                 .onChange(of: apiKey) { _, newValue in
                     apiKeySaved = false
+                    let target = provider
                     saveDebouncer.call {
-                        KeychainStore.saveAPIKey(newValue)
-                        apiKeySaved = !newValue.trimmingCharacters(in: .whitespaces).isEmpty
+                        KeychainStore.saveAPIKey(newValue, for: target)
+                        if target == self.provider {
+                            apiKeySaved = !newValue.trimmingCharacters(in: .whitespaces).isEmpty
+                        }
                     }
                 }
             if apiKeySaved {
@@ -69,9 +87,18 @@ struct SettingsView: View {
                     .font(.callout)
             }
         } header: {
-            Text("OpenAI")
+            Text("Provider")
         } footer: {
-            Text("Uses the gpt-live-transcribe realtime model ($0.017 / min). The key never leaves the Keychain.")
+            Text(providerFooter)
+        }
+    }
+
+    private var providerFooter: String {
+        switch provider {
+        case .openai:
+            return "Streams live transcript deltas over the Realtime API ($0.017 / min): text is typed as you speak. Each provider's key is stored separately in the Keychain."
+        case .fishAudio:
+            return "Batch transcription: the audio is uploaded when you stop dictating, so there is no live preview — the text arrives all at once. Each provider's key is stored separately in the Keychain."
         }
     }
 
@@ -135,7 +162,7 @@ struct SettingsView: View {
         } header: {
             Text("Transcription")
         } footer: {
-            Text("Delay trades latency for accuracy. Keywords (comma-separated) help with product names and acronyms. Changes apply from the next dictation.")
+            Text("Delay trades latency for accuracy. Keywords (comma-separated) help with product names and acronyms. Changes apply from the next dictation. Delay, keywords and the context prompt only apply to the OpenAI provider; languages applies to both (Fish Audio uses the first one).")
         }
     }
 
