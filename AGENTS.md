@@ -36,18 +36,23 @@ shows the current mode.
 ## Non-obvious decisions
 
 - **Provider abstraction**: dictation goes through the `TranscriptionSession`
-  protocol with two families — *streaming* (OpenAI `TranscriptionClient`,
-  live deltas over WebSocket) and *batch* (`FishAudioClient`: PCM buffered in
-  memory, uploaded as one WAV to `POST https://api.fish.audio/v1/asr` on
-  stop; capped at 30 min). Fish Audio has **no realtime ASR** (their
-  streaming/WebSocket API is TTS-only, and `s2.1-pro` is a TTS model — not
-  usable for dictation; same for OpenRouter, which has no realtime STT at
-  all). Batch providers emit a single `onCompleted` at finish, so live-typing
-  insertion degrades gracefully to insert-on-stop. Per-provider API keys are
-  separate Keychain accounts (`openai-api-key`, `fishaudio-api-key`) under
-  the same service. Delay/keywords/context-prompt options are OpenAI-only;
-  `languages` applies to both (Fish takes a single `language` field, we pass
-  the first).
+  protocol. Streaming providers: OpenAI (`TranscriptionClient`, append-only
+  live deltas → typed live) and Deepgram (`DeepgramClient`, nova-3 over
+  `wss://api.deepgram.com/v1/listen`, raw binary PCM frames, `Token` auth).
+  Batch providers subclass `BatchTranscriptionClient` (PCM buffered in
+  memory, WAV+multipart upload on stop, 30 min cap): Groq
+  (`whisper-large-v3-turbo`, OpenAI-compatible endpoint) and Fish Audio
+  (`POST /v1/asr`; **no realtime ASR** — their WebSocket API is TTS-only and
+  `s2.1-pro` is a TTS model; OpenRouter likewise has no realtime STT).
+  Per-provider API keys are separate Keychain accounts under the same
+  service. Delay/keywords/context-prompt options are OpenAI-only.
+- **Deepgram delta semantics**: interims are *revisions*, not append-only
+  deltas — they must never be typed. The protocol has a dedicated
+  `onInterim` (display-only, feeds the overlay preview); stable `is_final`
+  segments go through `onCompleted` and are inserted per phrase during
+  dictation. `finish()` sends `{"type":"CloseStream"}` and waits for the
+  final flush (`Metadata` event) or socket close. Language: `multi` unless
+  exactly one language hint is configured.
 
 - **Wire protocol** (docs pages are thin; assembled from the realtime
   transcription guide): WebSocket to

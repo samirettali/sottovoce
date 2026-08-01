@@ -5,6 +5,7 @@ import Foundation
 final class TranscriptionClient: NSObject, TranscriptionSession, URLSessionWebSocketDelegate {
     var onReady: (() -> Void)?
     var onDelta: ((String) -> Void)?
+    var onInterim: ((String) -> Void)?
     var onCompleted: ((String) -> Void)?
     var onError: ((String) -> Void)?
     /// Fired exactly once (on the main queue) when a finish() has fully drained.

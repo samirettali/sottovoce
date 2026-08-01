@@ -66,6 +66,8 @@ final class AppState: ObservableObject {
     private var deltaText = ""
     /// Text typed live from deltas for the current (uncommitted) item.
     private var itemTyped = ""
+    /// Unstable in-progress utterance (Deepgram interims): preview only.
+    private var interimText = ""
 
     private let holdThreshold: CFTimeInterval = 0.30
     private let doubleTapWindow: CFTimeInterval = 0.40
@@ -200,6 +202,7 @@ final class AppState: ObservableObject {
         insertedText = ""
         deltaText = ""
         itemTyped = ""
+        interimText = ""
         previewText = ""
         sessionReady = false
         flashWork?.cancel()
@@ -211,14 +214,26 @@ final class AppState: ObservableObject {
         switch provider {
         case .openai:
             var options = TranscriptionClient.Options.fromPrefs()
-            // Light per-app context: tell the model where the text is going so
-            // it can adapt jargon and tone (e.g. code vs prose). OpenAI-only:
-            // Fish Audio's ASR endpoint has no prompt parameter.
-            if let frontApp = NSWorkspace.shared.frontmostApplication?.localizedName {
-                let context = "The user is dictating into the macOS app \"\(frontApp)\"."
-                options.prompt = options.prompt.isEmpty ? context : options.prompt + " " + context
-            }
+            options.prompt = composedContextPrompt()
             client = TranscriptionClient(apiKey: apiKey, options: options)
+        case .deepgram:
+            client = DeepgramClient(
+                apiKey: apiKey,
+                languages: Prefs.languages,
+                keywords: Prefs.transcriptionKeywords
+            )
+        case .groq:
+            // Whisper's prompt biases vocabulary, so keywords ride along here.
+            var promptParts = [composedContextPrompt()]
+            let keywords = Prefs.transcriptionKeywords
+            if !keywords.isEmpty {
+                promptParts.append("Vocabulary: " + keywords.joined(separator: ", ") + ".")
+            }
+            client = GroqClient(
+                apiKey: apiKey,
+                language: Prefs.languages.first,
+                prompt: promptParts.filter { !$0.isEmpty }.joined(separator: " ")
+            )
         case .fishAudio:
             client = FishAudioClient(apiKey: apiKey, language: Prefs.languages.first)
         }
@@ -230,6 +245,11 @@ final class AppState: ObservableObject {
         client.onDelta = { [weak self] delta in
             guard let self, self.phase.isRecording || self.phase == .finishing else { return }
             self.handleDelta(delta)
+        }
+        client.onInterim = { [weak self] text in
+            guard let self, self.phase.isRecording || self.phase == .finishing else { return }
+            self.interimText = text
+            self.updatePreview()
         }
         client.onCompleted = { [weak self] transcript in
             self?.handleCompleted(transcript)
@@ -270,6 +290,20 @@ final class AppState: ObservableObject {
         recordingEndedAt = nil
         setPhase(.holdRecording)
         Sounds.play("Pop")
+    }
+
+    /// User context prompt plus light per-app context, so the model can adapt
+    /// jargon and tone to where the text is going (e.g. code vs prose).
+    private func composedContextPrompt() -> String {
+        var parts: [String] = []
+        let userPrompt = Prefs.transcriptionPrompt
+        if !userPrompt.isEmpty {
+            parts.append(userPrompt)
+        }
+        if let frontApp = NSWorkspace.shared.frontmostApplication?.localizedName {
+            parts.append("The user is dictating into the macOS app \"\(frontApp)\".")
+        }
+        return parts.joined(separator: " ")
     }
 
     private func finishSession() {
@@ -313,6 +347,7 @@ final class AppState: ObservableObject {
         previewText = ""
         deltaText = ""
         itemTyped = ""
+        interimText = ""
         sessionReady = false
         recordingStartedAt = nil
         recordingEndedAt = nil
@@ -341,6 +376,7 @@ final class AppState: ObservableObject {
 
     private func handleCompleted(_ transcript: String) {
         guard phase.isRecording || phase == .finishing else { return }
+        interimText = ""
 
         switch Prefs.insertionMethod {
         case .type:
@@ -382,7 +418,11 @@ final class AppState: ObservableObject {
     }
 
     private func updatePreview() {
-        previewText = String((insertedText + deltaText).suffix(120))
+        var combined = insertedText + deltaText
+        if !interimText.isEmpty {
+            combined += (combined.isEmpty ? "" : " ") + interimText
+        }
+        previewText = String(combined.suffix(120))
     }
 
     func clearHistory() {

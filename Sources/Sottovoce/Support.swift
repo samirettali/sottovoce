@@ -7,6 +7,8 @@ import Security
 
 enum TranscriptionProvider: String, CaseIterable, Identifiable {
     case openai
+    case deepgram
+    case groq
     case fishAudio
 
     var id: String { rawValue }
@@ -14,6 +16,8 @@ enum TranscriptionProvider: String, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .openai: return "OpenAI"
+        case .deepgram: return "Deepgram"
+        case .groq: return "Groq"
         case .fishAudio: return "Fish Audio"
         }
     }
@@ -21,6 +25,8 @@ enum TranscriptionProvider: String, CaseIterable, Identifiable {
     var menuLabel: String {
         switch self {
         case .openai: return "OpenAI — gpt-live-transcribe (live)"
+        case .deepgram: return "Deepgram — nova-3 (streaming)"
+        case .groq: return "Groq — Whisper large-v3 turbo (batch)"
         case .fishAudio: return "Fish Audio — ASR (batch)"
         }
     }
@@ -28,7 +34,73 @@ enum TranscriptionProvider: String, CaseIterable, Identifiable {
     var keychainAccount: String {
         switch self {
         case .openai: return "openai-api-key"
+        case .deepgram: return "deepgram-api-key"
+        case .groq: return "groq-api-key"
         case .fishAudio: return "fishaudio-api-key"
+        }
+    }
+
+    struct Capabilities {
+        /// When and how text lands in the target app.
+        let insertion: String
+        /// Live transcript preview in the overlay while speaking.
+        let livePreview: Bool
+        /// Multiple languages mixed within one dictation (code-switching).
+        let codeSwitching: Bool
+        /// How the Languages hint field is interpreted.
+        let languageHints: String
+        let keywords: Bool
+        let contextPrompt: Bool
+        let delayTuning: Bool
+        let pricing: String
+    }
+
+    var capabilities: Capabilities {
+        switch self {
+        case .openai:
+            return Capabilities(
+                insertion: "Word by word",
+                livePreview: true,
+                codeSwitching: true,
+                languageHints: "Several",
+                keywords: true,
+                contextPrompt: true,
+                delayTuning: true,
+                pricing: "$0.017/min"
+            )
+        case .deepgram:
+            return Capabilities(
+                insertion: "By phrase",
+                livePreview: true,
+                codeSwitching: true,
+                languageHints: "Multi or one",
+                keywords: true,
+                contextPrompt: false,
+                delayTuning: false,
+                pricing: "~$0.007/min"
+            )
+        case .groq:
+            return Capabilities(
+                insertion: "On stop, fast",
+                livePreview: false,
+                codeSwitching: false,
+                languageHints: "One or auto",
+                keywords: true,
+                contextPrompt: true,
+                delayTuning: false,
+                pricing: "~Free"
+            )
+        case .fishAudio:
+            return Capabilities(
+                insertion: "On stop",
+                livePreview: false,
+                codeSwitching: false,
+                languageHints: "One or auto",
+                keywords: false,
+                contextPrompt: false,
+                delayTuning: false,
+                pricing: "Credits"
+            )
         }
     }
 }

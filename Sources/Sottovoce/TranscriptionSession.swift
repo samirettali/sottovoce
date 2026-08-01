@@ -10,8 +10,11 @@ import Foundation
 protocol TranscriptionSession: AnyObject {
     /// The session is ready to accept audio.
     var onReady: (() -> Void)? { get set }
-    /// Incremental transcript text (streaming providers only).
+    /// Incremental append-only transcript text (streaming providers only).
     var onDelta: ((String) -> Void)? { get set }
+    /// Unstable preview of the utterance in progress; may be revised, so it
+    /// must only ever be displayed, never inserted (Deepgram interims).
+    var onInterim: ((String) -> Void)? { get set }
     /// A finalized transcript segment.
     var onCompleted: ((String) -> Void)? { get set }
     var onError: ((String) -> Void)? { get set }
