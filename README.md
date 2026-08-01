@@ -1,4 +1,4 @@
-# Transcribe
+# Sottovoce
 
 Minimal macOS dictation, powered by OpenAI's `gpt-live-transcribe` realtime
 model. Lives in the menu bar; a floating pill shows what it's doing.
@@ -21,5 +21,5 @@ make run
 3. Optionally change the dictation key, overlay corner, insertion method
    (paste vs. simulated typing), and language hints.
 
-For reliable permissions across rebuilds, copy `dist/Transcribe.app` to
+For reliable permissions across rebuilds, copy `dist/Sottovoce.app` to
 `/Applications`.

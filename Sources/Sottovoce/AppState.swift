@@ -192,7 +192,7 @@ final class AppState: ObservableObject {
         }
         guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
             promptForPermissions()
-            showError("Transcribe needs microphone access — grant it in System Settings.")
+            showError("Sottovoce needs microphone access — grant it in System Settings.")
             return
         }
 

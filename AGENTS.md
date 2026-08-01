@@ -1,4 +1,6 @@
-# Transcribe
+# Sottovoce
+
+(Formerly "Transcribe" — renamed 2026-08-01; bundle id `dev.samir.sottovoce`.)
 
 macOS menu bar dictation app backed by OpenAI's `gpt-live-transcribe` realtime
 model. Hold a hotkey to dictate (push-to-talk), double-tap it to dictate
@@ -9,7 +11,7 @@ shows the current mode.
 ## Build & run
 
 - Plain SwiftPM (no Xcode project): `make bundle` builds and assembles
-  `dist/Transcribe.app`; `make run` also launches it.
+  `dist/Sottovoce.app`; `make run` also launches it.
 - The `.app` bundle is required — TCC (mic + Accessibility) won't grant
   permissions to a bare executable. `Packaging/Info.plist` is copied into the
   bundle by the Makefile.
@@ -93,7 +95,7 @@ shows the current mode.
   background queue because a pending Automation-consent dialog would otherwise
   block the main thread (where the event tap lives). Needs
   `NSAppleEventsUsageDescription`; macOS prompts once per player.
-- **API key** lives in the Keychain (service `dev.samir.transcribe`), not
+- **API key** lives in the Keychain (service `dev.samir.sottovoce`), not
   UserDefaults. Other prefs are UserDefaults (`hotkeyKeyCode`,
   `overlayPosition`, `insertionMethod`, `playSounds`, `languages`).
 - Paste insertion saves/restores the clipboard (string flavor only) with a

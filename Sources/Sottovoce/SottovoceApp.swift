@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 @main
-struct TranscribeApp: App {
+struct SottovoceApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
@@ -88,7 +88,7 @@ private struct MenuContent: View {
 
         Divider()
 
-        Button("Quit Transcribe") {
+        Button("Quit Sottovoce") {
             NSApp.terminate(nil)
         }
         .keyboardShortcut("q")

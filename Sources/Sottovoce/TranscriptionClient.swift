@@ -29,7 +29,7 @@ final class TranscriptionClient: NSObject, URLSessionWebSocketDelegate {
 
     private let apiKey: String
     private let options: Options
-    private let queue = DispatchQueue(label: "dev.samir.transcribe.ws")
+    private let queue = DispatchQueue(label: "dev.samir.sottovoce.ws")
     private lazy var urlSession = URLSession(
         configuration: .default, delegate: self, delegateQueue: nil
     )

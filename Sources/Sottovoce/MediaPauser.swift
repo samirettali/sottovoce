@@ -59,7 +59,7 @@ final class MediaPauser {
         ),
     ]
 
-    private let queue = DispatchQueue(label: "dev.samir.transcribe.media")
+    private let queue = DispatchQueue(label: "dev.samir.sottovoce.media")
     private var pausedBundleIDs: [String] = []
 
     func pauseActivePlayers() {

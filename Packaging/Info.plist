@@ -5,21 +5,21 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleExecutable</key>
-	<string>Transcribe</string>
+	<string>Sottovoce</string>
 	<key>CFBundleIdentifier</key>
-	<string>dev.samir.transcribe</string>
+	<string>dev.samir.sottovoce</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Transcribe</string>
+	<string>Sottovoce</string>
 	<key>CFBundleDisplayName</key>
-	<string>Transcribe</string>
+	<string>Sottovoce</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>0.1.0</string>
 	<key>CFBundleVersion</key>
-	<string>2</string>
+	<string>3</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>LSUIElement</key>
@@ -27,9 +27,9 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Transcribe listens to your microphone while you dictate and streams the audio to OpenAI for transcription.</string>
+	<string>Sottovoce listens to your microphone while you dictate and streams the audio to OpenAI for transcription.</string>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Transcribe pauses media players while you dictate and resumes them afterwards.</string>
+	<string>Sottovoce pauses media players while you dictate and resumes them afterwards.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 </dict>

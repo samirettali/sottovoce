@@ -2,12 +2,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "Transcribe",
+    name: "Sottovoce",
     platforms: [.macOS(.v14)],
     targets: [
         .executableTarget(
-            name: "Transcribe",
-            path: "Sources/Transcribe"
+            name: "Sottovoce",
+            path: "Sources/Sottovoce"
         )
     ]
 )

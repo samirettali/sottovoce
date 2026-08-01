@@ -117,7 +117,7 @@ struct SettingsView: View {
         } header: {
             Text("Overlay")
         } footer: {
-            Text("When enabled, a small microphone chip stays visible so you can tell Transcribe is running.")
+            Text("When enabled, a small microphone chip stays visible so you can tell Sottovoce is running.")
         }
     }
 

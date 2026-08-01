@@ -172,7 +172,7 @@ enum Prefs {
 // MARK: - Keychain
 
 enum KeychainStore {
-    private static let service = "dev.samir.transcribe"
+    private static let service = "dev.samir.sottovoce"
     private static let account = "openai-api-key"
 
     private static var baseQuery: [String: Any] {

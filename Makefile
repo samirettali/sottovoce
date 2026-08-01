@@ -1,4 +1,4 @@
-APP_NAME := Transcribe
+APP_NAME := Sottovoce
 # CONFIG=debug enables dev-only tooling (e.g. the settings layout switcher).
 CONFIG   ?= release
 BUNDLE   := dist/$(APP_NAME).app
