@@ -47,8 +47,9 @@ struct SettingsView: View {
                 .formStyle(.grouped)
                 .tabItem { Label("Overlay", systemImage: "macwindow") }
         }
-        // Wide enough for the comparison grid's five provider columns.
-        .frame(width: 620, height: 480)
+        // Wide enough for the comparison grid's five provider columns, tall
+        // enough for the Providers tab with the model row at full height.
+        .frame(width: 620, height: 528)
         .onAppear {
             loadedKey = KeychainStore.loadAPIKey(for: provider) ?? ""
             apiKey = loadedKey
@@ -132,37 +133,70 @@ struct SettingsView: View {
     /// downloading it lazily on a hotkey press would stall for minutes.
     private var localModelSection: some View {
         Section {
-            LabeledContent("Parakeet TDT v3") {
+            // Deliberately the same shape as `apiKeySection`: a titled row,
+            // the Form's own separator, then a second row carrying the action
+            // or the confirmation. A plain HStack rather than LabeledContent —
+            // the grouped Form insets a LabeledContent label into its own
+            // column, which pulled the title out of line with the provider
+            // grid above.
+            HStack(spacing: 8) {
+                Text(Self.localModelName)
+                Spacer(minLength: 8)
+                Text(localModel.statusText)
+                    .foregroundStyle(localModel.phase == .ready ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
+                    .font(.callout)
+            }
+
+            // Height reserved across states so the footer below never shifts
+            // when a download starts or ends, and the tab never outgrows the
+            // window (which raised a scrollbar).
+            Group {
                 switch localModel.phase {
-                case .ready:
-                    Label("Ready", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                        .labelStyle(.titleAndIcon)
-                        .font(.callout)
                 case .missing:
                     Button("Download") { localModel.downloadIfNeeded() }
-                case .downloading(let fraction, let detail):
-                    VStack(alignment: .trailing, spacing: 4) {
-                        ProgressView(value: fraction)
-                            .frame(width: 160)
-                        Text(detail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                case .ready:
+                    Text(localModel.readyDetail)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                case .working(let progress):
+                    VStack(spacing: 4) {
+                        HStack(spacing: 6) {
+                            Text(progress.detailSentence)
+                            Spacer(minLength: 8)
+                            // Last and fixed-width, so the right edge stays put
+                            // however the sentence changes.
+                            Text(progress.percentText)
+                                .monospacedDigit()
+                                .frame(width: 32, alignment: .trailing)
+                        }
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        ProgressView(value: progress.overall)
+                            .controlSize(.small)
                     }
                 case .failed(let message):
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Button("Retry download") { localModel.downloadIfNeeded() }
+                    HStack(spacing: 8) {
+                        Button("Retry") { localModel.downloadIfNeeded() }
                         Text(message)
                             .font(.caption)
                             .foregroundStyle(.red)
-                            .multilineTextAlignment(.trailing)
+                            .lineLimit(2)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+            .frame(height: Self.localModelRowHeight, alignment: .center)
         } footer: {
             Text("Runs entirely on this Mac — no API key, no network, nothing leaves the machine. The model is about 470 MB and is downloaded once to Application Support. Requires Apple Silicon; it transcribes on the Neural Engine when you stop dictating.")
         }
     }
+
+    private static let localModelName = "Parakeet TDT v3"
+    /// Second row of the section; tall enough for the busiest state (caption
+    /// line above the progress bar), reserved for all the others.
+    private static let localModelRowHeight: CGFloat = 30
 
     private enum ComparisonValue {
         case bool(KeyPath<TranscriptionProvider.Capabilities, Bool>)
