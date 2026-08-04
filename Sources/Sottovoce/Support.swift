@@ -10,6 +10,7 @@ enum TranscriptionProvider: String, CaseIterable, Identifiable {
     case deepgram
     case groq
     case fishAudio
+    case parakeet
 
     var id: String { rawValue }
 
@@ -19,6 +20,7 @@ enum TranscriptionProvider: String, CaseIterable, Identifiable {
         case .deepgram: return "Deepgram"
         case .groq: return "Groq"
         case .fishAudio: return "Fish Audio"
+        case .parakeet: return "On-device"
         }
     }
 
@@ -28,8 +30,12 @@ enum TranscriptionProvider: String, CaseIterable, Identifiable {
         case .deepgram: return "Deepgram — nova-3 (streaming)"
         case .groq: return "Groq — Whisper large-v3 turbo (batch)"
         case .fishAudio: return "Fish Audio — ASR (batch)"
+        case .parakeet: return "On-device — Parakeet TDT v3 (offline)"
         }
     }
+
+    /// Local providers have nothing to authenticate against.
+    var requiresAPIKey: Bool { self != .parakeet }
 
     var keychainAccount: String {
         switch self {
@@ -37,6 +43,7 @@ enum TranscriptionProvider: String, CaseIterable, Identifiable {
         case .deepgram: return "deepgram-api-key"
         case .groq: return "groq-api-key"
         case .fishAudio: return "fishaudio-api-key"
+        case .parakeet: return "parakeet-unused"
         }
     }
 
@@ -100,6 +107,19 @@ enum TranscriptionProvider: String, CaseIterable, Identifiable {
                 contextPrompt: false,
                 delayTuning: false,
                 pricing: "Credits"
+            )
+        case .parakeet:
+            // Multilingual within its 25 European languages, but a language
+            // hint only biases token filtering — it doesn't gate detection.
+            return Capabilities(
+                insertion: "On stop, local",
+                livePreview: false,
+                codeSwitching: true,
+                languageHints: "One or auto",
+                keywords: false,
+                contextPrompt: false,
+                delayTuning: false,
+                pricing: "Free"
             )
         }
     }

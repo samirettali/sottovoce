@@ -31,8 +31,12 @@ private struct MenuBarLabel: View {
     var body: some View {
         Image(systemName: app.phase.isRecording || app.phase == .finishing ? "waveform" : "mic")
             .onAppear {
-                // First run: take the user straight to setup.
-                if KeychainStore.loadAPIKey(for: Prefs.provider) == nil {
+                // First run: take the user straight to setup. The on-device
+                // provider has no key, so it needs the model instead.
+                let needsSetup = Prefs.provider.requiresAPIKey
+                    ? KeychainStore.loadAPIKey(for: Prefs.provider) == nil
+                    : !ParakeetEngine.modelsDownloaded
+                if needsSetup {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         openSettings()
                         NSApp.activate(ignoringOtherApps: true)

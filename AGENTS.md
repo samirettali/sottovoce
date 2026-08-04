@@ -46,6 +46,35 @@ shows the current mode.
   `s2.1-pro` is a TTS model; OpenRouter likewise has no realtime STT).
   Per-provider API keys are separate Keychain accounts under the same
   service. Delay/keywords/context-prompt options are OpenAI-only.
+- **On-device provider** (`parakeet`): Parakeet TDT 0.6B v3 on CoreML/ANE via
+  [FluidAudio](https://github.com/FluidInference/FluidAudio). Chosen over
+  Whisper (WhisperKit) because it beats large-v3 on accuracy at a quarter of
+  the size, streams natively, and — being a transducer — doesn't hallucinate
+  text during silences, which is the failure mode that matters for
+  push-to-talk. v3 (not v2) because v2 is English-only; v3 covers 25 European
+  languages including Italian. Trade-off: no CJK.
+  - `ParakeetEngine` (actor) is a singleton that keeps the models **resident
+    across dictations** — loading them costs seconds, so per-session loading
+    would put that on every hotkey press. `loadTask` dedupes a dictation
+    started while Settings is still downloading.
+  - Models are ~470 MB, cached by FluidAudio under
+    `~/Library/Application Support/FluidAudio/Models/parakeet-tdt-0.6b-v3`.
+    That cache is **shared with any other FluidAudio app** (Hex, Spokenly,
+    Voice Ink…), so it may already be populated. The download is explicit in
+    Settings → Providers, never lazy on a hotkey press (it takes ~75 s cold).
+  - Audio: capture produces 24 kHz PCM16 but Parakeet wants 16 kHz Float32, so
+    `ParakeetEngine` converts and resamples via FluidAudio's `AudioConverter`.
+  - Batch semantics: it subclasses `BatchTranscriptionClient`, which grew an
+    overridable `processBuffer(_:)` (default = WAV + multipart upload) plus
+    `deliver`/`fail` so on-device providers reuse the buffering without the
+    HTTP path. No live preview; ~110× realtime, so a normal dictation resolves
+    in a fraction of a second.
+  - Keywords/context-prompt don't apply: Parakeet has no prompt conditioning.
+    FluidAudio does ship CTC keyword spotting + vocabulary rescoring
+    (`CustomVocabularyContext`), which is the path to wire up if the Keywords
+    field should ever work here.
+  - `TranscriptionProvider.requiresAPIKey` gates the Keychain check in
+    `AppState.startSession` and the first-run "open Settings" nudge.
 - **Deepgram delta semantics**: interims are *revisions*, not append-only
   deltas — they must never be typed. The protocol has a dedicated
   `onInterim` (display-only, feeds the overlay preview); stable `is_final`

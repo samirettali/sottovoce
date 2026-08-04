@@ -189,8 +189,13 @@ final class AppState: ObservableObject {
 
     private func startSession() {
         let provider = Prefs.provider
-        guard let apiKey = KeychainStore.loadAPIKey(for: provider) else {
+        let apiKey = KeychainStore.loadAPIKey(for: provider)
+        if provider.requiresAPIKey, apiKey == nil {
             showError("Add your \(provider.displayName) API key in Settings (menu bar icon → Settings…).")
+            return
+        }
+        if provider == .parakeet, !ParakeetEngine.modelsDownloaded {
+            showError("Download the on-device model in Settings → Providers first.")
             return
         }
         guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
@@ -210,15 +215,17 @@ final class AppState: ObservableObject {
         errorMessage = nil
         overlay?.reposition()
 
+        // Non-nil for every provider that needs it — checked above.
+        let key = apiKey ?? ""
         let client: TranscriptionSession
         switch provider {
         case .openai:
             var options = TranscriptionClient.Options.fromPrefs()
             options.prompt = composedContextPrompt()
-            client = TranscriptionClient(apiKey: apiKey, options: options)
+            client = TranscriptionClient(apiKey: key, options: options)
         case .deepgram:
             client = DeepgramClient(
-                apiKey: apiKey,
+                apiKey: key,
                 languages: Prefs.languages,
                 keywords: Prefs.transcriptionKeywords
             )
@@ -230,12 +237,14 @@ final class AppState: ObservableObject {
                 promptParts.append("Vocabulary: " + keywords.joined(separator: ", ") + ".")
             }
             client = GroqClient(
-                apiKey: apiKey,
+                apiKey: key,
                 language: Prefs.languages.first,
                 prompt: promptParts.filter { !$0.isEmpty }.joined(separator: " ")
             )
         case .fishAudio:
-            client = FishAudioClient(apiKey: apiKey, language: Prefs.languages.first)
+            client = FishAudioClient(apiKey: key, language: Prefs.languages.first)
+        case .parakeet:
+            client = ParakeetClient(languageHint: Prefs.languages.first)
         }
         self.client = client
 

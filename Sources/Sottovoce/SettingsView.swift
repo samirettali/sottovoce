@@ -6,6 +6,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject private var app = AppState.shared
+    @ObservedObject private var localModel = LocalModelStatus.shared
 
     @AppStorage(PrefKey.provider) private var providerRaw = TranscriptionProvider.openai.rawValue
     @State private var apiKey = ""
@@ -46,12 +47,14 @@ struct SettingsView: View {
                 .formStyle(.grouped)
                 .tabItem { Label("Overlay", systemImage: "macwindow") }
         }
-        .frame(width: 560, height: 480)
+        // Wide enough for the comparison grid's five provider columns.
+        .frame(width: 620, height: 480)
         .onAppear {
             loadedKey = KeychainStore.loadAPIKey(for: provider) ?? ""
             apiKey = loadedKey
             apiKeySaved = !loadedKey.isEmpty
             refreshPermissions()
+            localModel.refresh()
         }
         .onReceive(permissionsTimer) { _ in
             refreshPermissions()
@@ -69,6 +72,7 @@ struct SettingsView: View {
         case .openai: return "sk-…"
         case .groq: return "gsk_…"
         case .deepgram, .fishAudio: return "key…"
+        case .parakeet: return ""
         }
     }
 
@@ -82,28 +86,10 @@ struct SettingsView: View {
                 Text("Click a provider name to make it active.")
             }
 
-            Section {
-                SecureField("\(provider.displayName) API key", text: $apiKey, prompt: Text(keyPrompt))
-                    .onChange(of: apiKey) { _, newValue in
-                        // A programmatic reload (provider switch) is already saved.
-                        guard newValue != loadedKey else { return }
-                        apiKeySaved = false
-                        let target = provider
-                        saveDebouncer.call {
-                            KeychainStore.saveAPIKey(newValue, for: target)
-                            if target == self.provider {
-                                loadedKey = newValue
-                                apiKeySaved = !newValue.trimmingCharacters(in: .whitespaces).isEmpty
-                            }
-                        }
-                    }
-                if apiKeySaved {
-                    Label("Saved to the macOS Keychain", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                        .font(.callout)
-                }
-            } footer: {
-                Text("Each provider's key is stored separately in the Keychain.")
+            if provider.requiresAPIKey {
+                apiKeySection
+            } else {
+                localModelSection
             }
         }
         .formStyle(.grouped)
@@ -112,6 +98,69 @@ struct SettingsView: View {
             loadedKey = KeychainStore.loadAPIKey(for: newProvider) ?? ""
             apiKey = loadedKey
             apiKeySaved = !loadedKey.isEmpty
+            localModel.refresh()
+        }
+    }
+
+    private var apiKeySection: some View {
+        Section {
+            SecureField("\(provider.displayName) API key", text: $apiKey, prompt: Text(keyPrompt))
+                .onChange(of: apiKey) { _, newValue in
+                    // A programmatic reload (provider switch) is already saved.
+                    guard newValue != loadedKey else { return }
+                    apiKeySaved = false
+                    let target = provider
+                    saveDebouncer.call {
+                        KeychainStore.saveAPIKey(newValue, for: target)
+                        if target == self.provider {
+                            loadedKey = newValue
+                            apiKeySaved = !newValue.trimmingCharacters(in: .whitespaces).isEmpty
+                        }
+                    }
+                }
+            if apiKeySaved {
+                Label("Saved to the macOS Keychain", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .font(.callout)
+            }
+        } footer: {
+            Text("Each provider's key is stored separately in the Keychain.")
+        }
+    }
+
+    /// The on-device model has to be fetched once before the first dictation;
+    /// downloading it lazily on a hotkey press would stall for minutes.
+    private var localModelSection: some View {
+        Section {
+            LabeledContent("Parakeet TDT v3") {
+                switch localModel.phase {
+                case .ready:
+                    Label("Ready", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .labelStyle(.titleAndIcon)
+                        .font(.callout)
+                case .missing:
+                    Button("Download") { localModel.downloadIfNeeded() }
+                case .downloading(let fraction, let detail):
+                    VStack(alignment: .trailing, spacing: 4) {
+                        ProgressView(value: fraction)
+                            .frame(width: 160)
+                        Text(detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                case .failed(let message):
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Button("Retry download") { localModel.downloadIfNeeded() }
+                        Text(message)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
+            }
+        } footer: {
+            Text("Runs entirely on this Mac — no API key, no network, nothing leaves the machine. The model is about 470 MB and is downloaded once to Application Support. Requires Apple Silicon; it transcribes on the Neural Engine when you stop dictating.")
         }
     }
 
@@ -269,7 +318,7 @@ struct SettingsView: View {
         } header: {
             Text("Transcription")
         } footer: {
-            Text("Delay trades latency for accuracy (OpenAI only). Keywords (comma-separated) help with product names and acronyms — used by OpenAI, Deepgram and Groq. The context prompt goes to OpenAI and Groq. Languages: Deepgram and OpenAI handle several; Groq and Fish Audio take only the first, so leave the field empty with those for auto-detection. Changes apply from the next dictation.")
+            Text("Delay trades latency for accuracy (OpenAI only). Keywords (comma-separated) help with product names and acronyms — used by OpenAI, Deepgram and Groq. The context prompt goes to OpenAI and Groq. Languages: Deepgram and OpenAI handle several; Groq, Fish Audio and On-device take only the first, so leave the field empty with those for auto-detection. Changes apply from the next dictation.")
         }
     }
 
