@@ -29,7 +29,7 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Sottovoce listens to your microphone while you dictate and streams the audio to OpenAI for transcription.</string>
+	<string>Sottovoce listens to your microphone while you dictate. Your audio is sent to the transcription provider you pick in Settings, or stays entirely on this Mac if you pick the on-device provider.</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Sottovoce pauses media players while you dictate and resumes them afterwards.</string>
 	<key>NSPrincipalClass</key>
