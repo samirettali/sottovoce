@@ -1,8 +1,12 @@
 import Foundation
 
 /// Shared machinery for batch providers: PCM is buffered in memory during
-/// dictation and uploaded in one request on finish(). Subclasses provide the
-/// provider-specific request and response parsing.
+/// dictation and turned into a transcript in one go on finish(), so the whole
+/// text arrives as a single completed segment.
+///
+/// Remote providers override `makeRequest`/`parseTranscript` and get the
+/// default WAV + multipart upload. On-device providers override
+/// `processBuffer(_:)` instead and report through `deliver`/`fail`.
 class BatchTranscriptionClient: TranscriptionSession {
     var onReady: (() -> Void)?
     var onDelta: ((String) -> Void)?
@@ -22,6 +26,13 @@ class BatchTranscriptionClient: TranscriptionSession {
     // MARK: - Override points
 
     var providerName: String { "Provider" }
+
+    /// Turns the buffered dictation into a transcript. The default packages it
+    /// as a WAV and uploads it; override for on-device transcription.
+    /// Must end in exactly one `deliver(_:)` or `fail(_:)`.
+    func processBuffer(_ pcm: Data) {
+        upload(makeRequest(wav: Self.wavFile(pcm: pcm, sampleRate: 24_000, channels: 1)))
+    }
 
     func makeRequest(wav: Data) -> URLRequest {
         fatalError("subclass must override makeRequest(wav:)")
@@ -61,8 +72,25 @@ class BatchTranscriptionClient: TranscriptionSession {
                 DispatchQueue.main.async { self.onFinished?() }
                 return
             }
-            let wav = Self.wavFile(pcm: self.pcm, sampleRate: 24_000, channels: 1)
-            self.upload(self.makeRequest(wav: wav))
+            self.processBuffer(self.pcm)
+        }
+    }
+
+    /// Reports a finished transcript to AppState. Call from any queue.
+    func deliver(_ text: String) {
+        DispatchQueue.main.async {
+            guard !self.cancelled else { return }
+            self.onCompleted?(text)
+            self.onFinished?()
+        }
+    }
+
+    /// Reports a failure to AppState. Call from any queue.
+    func fail(_ message: String) {
+        DispatchQueue.main.async {
+            guard !self.cancelled else { return }
+            self.onError?(message)
+            self.onFinished?()
         }
     }
 
