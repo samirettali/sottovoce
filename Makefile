@@ -17,9 +17,10 @@ build:
 
 bundle: build
 	rm -rf $(BUNDLE)
-	mkdir -p $(BUNDLE)/Contents/MacOS
+	mkdir -p $(BUNDLE)/Contents/MacOS $(BUNDLE)/Contents/Resources
 	cp $(BINARY) $(BUNDLE)/Contents/MacOS/$(APP_NAME)
 	cp Packaging/Info.plist $(BUNDLE)/Contents/Info.plist
+	cp Packaging/AppIcon.icns $(BUNDLE)/Contents/Resources/AppIcon.icns
 	@if security find-identity -p codesigning | grep -q "$(SIGN_IDENTITY)"; then \
 		echo "codesign --force --sign \"$(SIGN_IDENTITY)\" $(BUNDLE)"; \
 		codesign --force --sign "$(SIGN_IDENTITY)" $(BUNDLE); \

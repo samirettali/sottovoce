@@ -3,3 +3,12 @@
 dist/
 .DS_Store
 keys.txt
+
+# Icon exploration and generated icon artefacts; the chosen source and
+# design/make-icon.py are tracked, everything else is reproducible or rejected.
+design/icons/*
+!design/icons/round4/
+design/icons/round4/*
+!design/icons/round4/o2-3.png
+design/AppIcon-1024.png
+design/AppIcon.iconset/
