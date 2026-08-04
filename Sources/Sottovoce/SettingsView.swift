@@ -50,6 +50,17 @@ struct SettingsView: View {
         // Wide enough for the comparison grid's five provider columns, tall
         // enough for the Providers tab with the model row at full height.
         .frame(width: 620, height: 528)
+        // The app is LSUIElement, so it normally has no Dock icon at all.
+        // While Settings is open, promote it to a regular app so the window
+        // can be reached from the Dock and ⌘-Tab, then drop back to a menu
+        // bar accessory on close.
+        .onAppear {
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        .onDisappear {
+            NSApp.setActivationPolicy(.accessory)
+        }
         .onAppear {
             loadedKey = KeychainStore.loadAPIKey(for: provider) ?? ""
             apiKey = loadedKey
