@@ -130,6 +130,7 @@ enum PrefKey {
     static let hotkeyKeyCode = "hotkeyKeyCode"
     static let overlayPosition = "overlayPosition"
     static let showIdleOverlay = "showIdleOverlay"
+    static let inputDeviceUID = "inputDeviceUID"
     static let insertionMethod = "insertionMethod"
     static let playSounds = "playSounds"
     static let pauseMediaWhileDictating = "pauseMediaWhileDictating"
@@ -216,6 +217,7 @@ enum Prefs {
             PrefKey.hotkeyKeyCode: 61, // Right Option
             PrefKey.overlayPosition: OverlayPosition.bottomCenter.rawValue,
             PrefKey.showIdleOverlay: false,
+            PrefKey.inputDeviceUID: "",
             PrefKey.insertionMethod: InsertionMethod.type.rawValue,
             PrefKey.playSounds: true,
             PrefKey.pauseMediaWhileDictating: false,
@@ -239,6 +241,13 @@ enum Prefs {
     static var overlayPosition: OverlayPosition {
         get { OverlayPosition(rawValue: defaults.string(forKey: PrefKey.overlayPosition) ?? "") ?? .bottomCenter }
         set { defaults.set(newValue.rawValue, forKey: PrefKey.overlayPosition) }
+    }
+
+    /// UID of the microphone to capture from; empty means the system default.
+    /// Stored as a UID rather than an `AudioDeviceID` — see `AudioInputDevice`.
+    static var inputDeviceUID: String {
+        get { defaults.string(forKey: PrefKey.inputDeviceUID) ?? "" }
+        set { defaults.set(newValue, forKey: PrefKey.inputDeviceUID) }
     }
 
     static var insertionMethod: InsertionMethod {

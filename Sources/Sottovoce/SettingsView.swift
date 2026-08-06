@@ -23,6 +23,8 @@ struct SettingsView: View {
     @AppStorage(PrefKey.transcriptionPrompt) private var promptRaw = ""
     @AppStorage(PrefKey.transcriptionKeywords) private var keywordsRaw = ""
     @AppStorage(PrefKey.transcriptionDelay) private var delayRaw = ""
+    @AppStorage(PrefKey.inputDeviceUID) private var inputDeviceUID = ""
+    @StateObject private var inputDevices = AudioInputDeviceList()
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var micAuthorized = false
     @State private var axTrusted = false
@@ -37,7 +39,7 @@ struct SettingsView: View {
             Form { generalSection; permissionsSection }
                 .formStyle(.grouped)
                 .tabItem { Label("General", systemImage: "gearshape") }
-            Form { shortcutSection; outputSection }
+            Form { shortcutSection; inputSection; outputSection }
                 .formStyle(.grouped)
                 .tabItem { Label("Dictation", systemImage: "keyboard") }
             Form { transcriptionSection }
@@ -365,6 +367,34 @@ struct SettingsView: View {
         } footer: {
             Text("Delay trades latency for accuracy (OpenAI only). Keywords (comma-separated) help with product names and acronyms — used by OpenAI, Deepgram and Groq. The context prompt goes to OpenAI and Groq. Languages: Deepgram and OpenAI handle several; Groq, Fish Audio and On-device take only the first, so leave the field empty with those for auto-detection. Changes apply from the next dictation.")
         }
+    }
+
+    private var inputSection: some View {
+        Section {
+            Picker("Microphone", selection: $inputDeviceUID) {
+                Text(systemDefaultLabel).tag("")
+                Divider()
+                ForEach(inputDevices.devices) { device in
+                    Text(device.name).tag(device.uid)
+                }
+                // Without a row for it, an unplugged device would leave the
+                // picker blank and look like nothing is selected at all.
+                if !inputDeviceUID.isEmpty,
+                   !inputDevices.devices.contains(where: { $0.uid == inputDeviceUID }) {
+                    Divider()
+                    Text("Selected device (not connected)").tag(inputDeviceUID)
+                }
+            }
+        } header: {
+            Text("Microphone")
+        } footer: {
+            Text("Pinning the built-in microphone keeps Bluetooth headphones out of their low-quality headset mode, so music playing through them doesn't degrade while you dictate.")
+        }
+    }
+
+    private var systemDefaultLabel: String {
+        guard let name = inputDevices.systemDefault?.name else { return "System default" }
+        return "System default (\(name))"
     }
 
     private var outputSection: some View {

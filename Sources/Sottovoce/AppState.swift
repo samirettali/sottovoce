@@ -291,6 +291,15 @@ final class AppState: ObservableObject {
             return
         }
 
+        audio.onInterrupted = { [weak self] in
+            guard let self, self.phase.isRecording else { return }
+            self.showError("The microphone became unavailable — dictation stopped.")
+            self.teardownSession()
+        }
+        if let notice = audio.deviceFallbackNotice {
+            showError(notice)
+        }
+
         if Prefs.pauseMediaWhileDictating {
             mediaPauser.pauseActivePlayers()
         }

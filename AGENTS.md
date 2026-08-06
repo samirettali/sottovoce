@@ -165,6 +165,26 @@ shows the current mode.
 - **Audio buffering before session ready**: mic capture starts immediately on
   key-down; chunks are queued in the client until `session.updated` arrives,
   then flushed — nothing said during connection setup is lost.
+- **Input device selection** (`AudioDevices.swift`, Settings → Dictation):
+  without it the engine implicitly takes the system default, which means
+  connected AirPods capture through their headset profile and drag any music
+  playing through them down with it for the whole dictation. Pinning the
+  built-in microphone avoids that.
+  - The preference stores the device **UID**, never the `AudioDeviceID`: the
+    numeric id is assigned at runtime and gets reused across reboots and
+    reconnections, so a stored id would eventually point at a different
+    microphone. UIDs like `BuiltInMicrophoneDevice` are stable.
+  - The device is set on `inputNode.auAudioUnit` **before** anything reads
+    `outputFormat(forBus:)` — the format belongs to the device, so reading it
+    first would build the converter for the wrong one. It's also set explicitly
+    for "system default", because the audio unit remembers the last device it
+    was given and would otherwise keep using a deselected microphone.
+  - Input-capable devices are told apart from output-only ones by an empty
+    input `kAudioDevicePropertyStreamConfiguration`.
+  - A device that disappears mid-dictation throws nowhere and simply stops
+    delivering audio; `AVAudioEngineConfigurationChange` is the only signal, so
+    `AudioCapture.onInterrupted` listens for it and ends the session with an
+    error. A device missing at start falls back to the default with a notice.
 - **Overlay**: borderless non-activating `NSPanel`, `.statusBar` level,
   joins all Spaces + fullscreen, click-through, placed on the screen containing
   the mouse pointer. The panel is oversized (600×150) with 20 pt inner padding
