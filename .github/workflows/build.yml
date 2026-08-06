@@ -1,0 +1,36 @@
+name: build
+
+# Compile-only check. Releases are built and signed locally on purpose: doing
+# them here would mean keeping the Developer ID private key and the
+# notarisation credentials in repository secrets, and the DMG layout step
+# scripts Finder, which hosted runners can't do reliably.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache SwiftPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: swiftpm-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: swiftpm-${{ runner.os }}-
+
+      - name: Build
+        run: swift build -c release
+
+      # Catches breakage in Info.plist, the icon and the bundle layout, which a
+      # plain `swift build` wouldn't. Signing falls back to ad-hoc here, since
+      # no identity exists on the runner.
+      - name: Assemble the app bundle
+        run: make bundle
