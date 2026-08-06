@@ -185,6 +185,23 @@ shows the current mode.
     delivering audio; `AVAudioEngineConfigurationChange` is the only signal, so
     `AudioCapture.onInterrupted` listens for it and ends the session with an
     error. A device missing at start falls back to the default with a notice.
+- **Input level meter** (`InputLevelMonitor.swift`, next to the picker): its own
+  `AVAudioEngine`, because `AudioCapture` only exists during a dictation and the
+  meter has to work when nothing is being dictated. Display only — gain belongs
+  on the device.
+  - **Peak, not RMS.** The overlay's level is RMS, which averages away the short
+    transients that actually clip, so an RMS meter reads comfortable while the
+    signal is already flat-topped. Fast attack, decay at `level * 0.82` per
+    buffer so peaks stay readable; the top segments go red only once samples
+    have really reached full scale, not merely because it's loud.
+  - Only one engine on the device at a time: while a dictation runs the monitor
+    stops and the meter shows `AppState.level` instead.
+  - The microphone is **live whenever the Dictation tab is open**, so macOS
+    shows its orange indicator, exactly as System Settings does. It's stopped
+    from the tab's `onDisappear` *and* the window's, so a missed callback can't
+    leave it running. It only starts if microphone access is already granted,
+    checked directly rather than through the timer-refreshed `micAuthorized`,
+    so opening Settings never triggers a surprise permission prompt.
 - **Overlay**: borderless non-activating `NSPanel`, `.statusBar` level,
   joins all Spaces + fullscreen, click-through, placed on the screen containing
   the mouse pointer. The panel is oversized (600×150) with 20 pt inner padding
