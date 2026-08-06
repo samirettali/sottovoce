@@ -23,3 +23,14 @@ make run
 
 For reliable permissions across rebuilds, copy `dist/Sottovoce.app` to
 `/Applications`.
+
+## Release
+
+`make release` produces a signed, notarised and stapled
+`dist/Sottovoce-<version>.dmg`. It needs a `Developer ID Application`
+certificate in the login keychain and a notarytool keychain profile:
+
+```sh
+xcrun notarytool store-credentials sottovoce \
+  --apple-id <apple id> --team-id <team id> --password <app-specific password>
+```
