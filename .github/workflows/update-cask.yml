@@ -1,0 +1,84 @@
+name: update cask
+
+# Keeps samirettali/homebrew-tap in step with the releases published here.
+# Runs on Linux: all it does is hash a file and edit a line of Ruby.
+#
+# Needs a TAP_TOKEN secret — a fine-grained PAT scoped to samirettali/homebrew-tap
+# alone, with Contents read/write. Deliberately *not* anything to do with signing:
+# the Developer ID key stays on the release machine and never reaches CI.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to push to the tap, e.g. v0.1.0
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hash the released disk image
+        id: release
+        env:
+          TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          asset="Sottovoce-${version}.dmg"
+          curl -fsSL -o "$asset" \
+            "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${asset}"
+          {
+            echo "version=$version"
+            echo "sha=$(sha256sum "$asset" | cut -d' ' -f1)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check out the tap
+        uses: actions/checkout@v4
+        with:
+          repository: samirettali/homebrew-tap
+          token: ${{ secrets.TAP_TOKEN }}
+          path: tap
+
+      - name: Bump the cask
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          set -euo pipefail
+          python3 - tap/Casks/sottovoce.rb <<'PY'
+          import os, re, sys
+
+          path = sys.argv[1]
+          src = open(path).read()
+          src, versions = re.subn(
+              r'^(  version ")[^"]+(")', rf'\g<1>{os.environ["VERSION"]}\g<2>', src, flags=re.M
+          )
+          src, hashes = re.subn(
+              r'^(  sha256 ")[^"]+(")', rf'\g<1>{os.environ["SHA"]}\g<2>', src, flags=re.M
+          )
+          # Fail loudly rather than push a cask that silently didn't change.
+          if (versions, hashes) != (1, 1):
+              sys.exit(f"expected one version and one sha256 line, replaced {versions} and {hashes}")
+          open(path, "w").write(src)
+          PY
+
+      - name: Commit and push
+        working-directory: tap
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/sottovoce.rb
+          if git diff --cached --quiet; then
+            echo "cask already at ${VERSION}, nothing to do"
+            exit 0
+          fi
+          git commit -m "chore(sottovoce): ${VERSION}"
+          git push
