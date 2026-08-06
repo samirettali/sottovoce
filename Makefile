@@ -1,5 +1,7 @@
 APP_NAME := Sottovoce
-# CONFIG=debug enables dev-only tooling (e.g. the settings layout switcher).
+# CONFIG=debug drops the optimiser: a rebuild of the app's own sources takes a
+# few seconds instead of tens of them. Nothing else differs — there is no
+# DEBUG-gated code.
 CONFIG   ?= release
 BUNDLE   := dist/$(APP_NAME).app
 BINARY   := .build/$(CONFIG)/$(APP_NAME)
@@ -17,7 +19,7 @@ SIGN_IDENTITY  ?= Developer ID Application
 # notarytool keychain profile: xcrun notarytool store-credentials sottovoce …
 NOTARY_PROFILE ?= sottovoce
 
-.PHONY: build bundle run verify release dmg clean
+.PHONY: build bundle run dev verify release dmg clean
 
 build:
 	swift build -c $(CONFIG)
@@ -43,6 +45,19 @@ bundle: build
 		--entitlements $(ENTITLEMENTS) --sign "$$identity" $(BUNDLE)
 
 run: bundle
+	@pkill -x $(APP_NAME) || true
+	open $(BUNDLE)
+
+# Fast loop while working on a change: unoptimised build, running copy replaced.
+#
+# Quitting first is not optional. Nothing stops two instances, and two of them
+# means two CGEvent taps: the hotkey fires both and every dictation is inserted
+# twice. `open` would not have helped either — faced with a running app of the
+# same bundle id it just activates it, so you would be looking at the old
+# binary believing you were testing the new one.
+dev:
+	@pkill -x $(APP_NAME) || true
+	$(MAKE) bundle CONFIG=debug
 	open $(BUNDLE)
 
 verify:
