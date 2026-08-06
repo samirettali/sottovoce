@@ -1,3 +1,4 @@
+import AVFoundation
 import Combine
 import CoreAudio
 import Foundation
@@ -55,6 +56,39 @@ enum AudioDevices {
 
     static func name(uid wanted: String) -> String? {
         deviceID(uid: wanted).flatMap { name(of: $0) }
+    }
+
+    /// Points an input audio unit at the configured microphone. Returns a
+    /// message to surface when that device isn't available and the system
+    /// default was used instead; `nil` when all is well.
+    ///
+    /// Must be called before anything reads the node's format: the format
+    /// belongs to the device, so reading it first describes the wrong one.
+    /// The device is always set explicitly, including for "system default" —
+    /// the audio unit remembers the last device it was given and would
+    /// otherwise keep using a microphone the user just deselected.
+    @discardableResult
+    static func applyPreferredInput(to unit: AUAudioUnit) -> String? {
+        let wanted = Prefs.inputDeviceUID
+
+        var notice: String?
+        var target = systemDefaultInputID()
+
+        if !wanted.isEmpty {
+            if let configured = deviceID(uid: wanted) {
+                target = configured
+            } else {
+                notice = "The selected microphone isn't available — using the system default."
+            }
+        }
+
+        guard let target else { return notice }
+        do {
+            try unit.setDeviceID(target)
+        } catch {
+            return "Could not use the selected microphone — using the system default."
+        }
+        return notice
     }
 }
 

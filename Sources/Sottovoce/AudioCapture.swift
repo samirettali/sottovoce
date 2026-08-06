@@ -33,7 +33,7 @@ final class AudioCapture {
         // Before anything reads a format: the format belongs to the device, so
         // choosing the device has to come first or the converter is built for
         // the wrong one.
-        deviceFallbackNotice = selectInputDevice()
+        deviceFallbackNotice = AudioDevices.applyPreferredInput(to: input.auAudioUnit)
 
         let inputFormat = input.outputFormat(forBus: 0)
         guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
@@ -111,34 +111,4 @@ final class AudioCapture {
         running = false
     }
 
-    /// Points the engine's input at the configured microphone. Returns a
-    /// message to surface when the configured device isn't available, having
-    /// fallen back to the system default; `nil` when all is well.
-    ///
-    /// The device is always set explicitly, including for "system default":
-    /// the audio unit remembers the last device it was given, so leaving it
-    /// alone would keep capturing from a microphone the user just deselected.
-    private func selectInputDevice() -> String? {
-        let unit = engine.inputNode.auAudioUnit
-        let wanted = Prefs.inputDeviceUID
-
-        var notice: String?
-        var deviceID = AudioDevices.systemDefaultInputID()
-
-        if !wanted.isEmpty {
-            if let configured = AudioDevices.deviceID(uid: wanted) {
-                deviceID = configured
-            } else {
-                notice = "The selected microphone isn't available — using the system default."
-            }
-        }
-
-        guard let deviceID else { return notice }
-        do {
-            try unit.setDeviceID(deviceID)
-        } catch {
-            return "Could not use the selected microphone — using the system default."
-        }
-        return notice
-    }
 }

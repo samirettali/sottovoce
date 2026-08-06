@@ -25,6 +25,7 @@ struct SettingsView: View {
     @AppStorage(PrefKey.transcriptionDelay) private var delayRaw = ""
     @AppStorage(PrefKey.inputDeviceUID) private var inputDeviceUID = ""
     @StateObject private var inputDevices = AudioInputDeviceList()
+    @StateObject private var levelMonitor = InputLevelMonitor()
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var micAuthorized = false
     @State private var axTrusted = false
@@ -42,6 +43,14 @@ struct SettingsView: View {
             Form { shortcutSection; inputSection; outputSection }
                 .formStyle(.grouped)
                 .tabItem { Label("Dictation", systemImage: "keyboard") }
+                .onAppear { startLevelMeter() }
+                .onDisappear { levelMonitor.stop() }
+                .onChange(of: inputDeviceUID) { _, _ in levelMonitor.restart() }
+                // One engine on the device at a time: during a dictation the
+                // meter follows the capture that is already running.
+                .onChange(of: app.phase.isRecording) { _, recording in
+                    if recording { levelMonitor.stop() } else { startLevelMeter() }
+                }
             Form { transcriptionSection }
                 .formStyle(.grouped)
                 .tabItem { Label("Transcription", systemImage: "waveform") }
@@ -62,6 +71,9 @@ struct SettingsView: View {
         }
         .onDisappear {
             NSApp.setActivationPolicy(.accessory)
+            // Belt and braces: the microphone must never stay live because a
+            // tab's onDisappear didn't fire.
+            levelMonitor.stop()
         }
         .onAppear {
             loadedKey = KeychainStore.loadAPIKey(for: provider) ?? ""
@@ -385,6 +397,9 @@ struct SettingsView: View {
                     Text("Selected device (not connected)").tag(inputDeviceUID)
                 }
             }
+            LabeledContent("Input level") {
+                InputLevelMeter(level: displayedLevel, overloading: levelMonitor.overloading)
+            }
         } header: {
             Text("Microphone")
         } footer: {
@@ -395,6 +410,19 @@ struct SettingsView: View {
     private var systemDefaultLabel: String {
         guard let name = inputDevices.systemDefault?.name else { return "System default" }
         return "System default (\(name))"
+    }
+
+    /// The running capture already owns the device during a dictation, so the
+    /// meter reads from it rather than opening a second engine.
+    private var displayedLevel: Float {
+        app.phase.isRecording ? app.level : levelMonitor.level
+    }
+
+    /// Checked directly rather than through `micAuthorized`, which is only
+    /// refreshed on a timer and can still be false on first appearance.
+    private func startLevelMeter() {
+        guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else { return }
+        levelMonitor.start()
     }
 
     private var outputSection: some View {
@@ -541,6 +569,39 @@ private struct PositionPicker: View {
         }
         .buttonStyle(.plain)
         .animation(.spring(response: 0.25, dampingFraction: 0.8), value: selection)
+    }
+}
+
+// MARK: - Input level meter
+
+/// Segmented meter in the shape of the one in System Settings → Sound → Input,
+/// so it reads as the same kind of instrument.
+private struct InputLevelMeter: View {
+    let level: Float
+    let overloading: Bool
+
+    private static let segments = 20
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(0..<Self.segments, id: \.self) { index in
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(fill(at: Float(index + 1) / Float(Self.segments)))
+                    .frame(width: 6, height: 11)
+            }
+        }
+        .animation(.linear(duration: 0.06), value: level)
+        .accessibilityElement()
+        .accessibilityLabel("Input level")
+        .accessibilityValue("\(Int(level * 100)) percent")
+    }
+
+    private func fill(at fraction: Float) -> Color {
+        guard level >= fraction else { return Color(nsColor: .quaternaryLabelColor) }
+        // Red only for the headroom at the top, and only once the signal has
+        // actually reached full scale — not merely because it is loud.
+        if overloading, fraction > 0.9 { return .red }
+        return .accentColor
     }
 }
 
