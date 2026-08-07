@@ -125,6 +125,9 @@ struct SettingsView: View {
             apiKey = loadedKey
             apiKeySaved = !loadedKey.isEmpty
             localModel.refresh()
+            // Switching to the on-device provider should not leave the first
+            // dictation waiting for a load that could have started here.
+            app.preloadLocalModelIfNeeded()
         }
     }
 

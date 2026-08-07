@@ -94,6 +94,18 @@ shows the current mode.
     across dictations** — loading them costs seconds, so per-session loading
     would put that on every hotkey press. `loadTask` dedupes a dictation
     started while Settings is still downloading.
+  - They are loaded **ahead of the first dictation**
+    (`AppState.preloadLocalModelIfNeeded`): at launch when the provider is
+    already `.parakeet`, when Settings switches to it, and when a dictation
+    starts. Otherwise the first load happens inside `transcribe`, which for a
+    batch provider runs *after* the user stops speaking — the wrong moment to
+    do work the user is waiting on. Cheap to over-call, `loadTask` dedupes.
+  - Preloading costs far less memory than the model size suggests: CoreML
+    memory-maps the weights, so the process stays around 90 MB RSS rather than
+    growing by the ~470 MB the models occupy on disk, and those pages are
+    evictable. For the same reason neither RSS nor `lsof` can tell you whether
+    the models are resident — the files aren't held open once loaded.
+    `ParakeetEngine.isLoaded` is the signal.
   - Models are ~470 MB, cached by FluidAudio under
     `~/Library/Application Support/FluidAudio/Models/parakeet-tdt-0.6b-v3`.
     That cache is **shared with any other FluidAudio app** (Hex, Spokenly,
