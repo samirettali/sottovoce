@@ -16,8 +16,11 @@ ZIP      := dist/$(APP_NAME).zip
 # gets. Falls back to Apple Development, then ad-hoc (permissions re-prompt every
 # build). `release` insists on the real Developer ID certificate.
 SIGN_IDENTITY  ?= Developer ID Application
-# notarytool keychain profile: xcrun notarytool store-credentials sottovoce …
-NOTARY_PROFILE ?= sottovoce
+# notarytool keychain profile. Shared across apps on purpose: the credentials
+# belong to the Apple account, not to any one app, so a per-app name would mean
+# several keychain items holding identical secrets and a fresh machine needing
+# one `store-credentials` run per app.
+NOTARY_PROFILE ?= notary
 
 .PHONY: build bundle run dev verify release dmg clean
 

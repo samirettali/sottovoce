@@ -48,10 +48,12 @@ shows the current mode.
   It notarises *twice*, the app and then the DMG: the ticket stapled to a DMG
   only covers the app while it's on the mounted image, so the app needs its own
   ticket to launch offline after being dragged to /Applications. Needs a
-  notarytool keychain profile named `sottovoce`
-  (`xcrun notarytool store-credentials sottovoce --apple-id samir@ettali.com
+  notarytool keychain profile named `notary`
+  (`xcrun notarytool store-credentials notary --apple-id samir@ettali.com
   --team-id 22K9H4B864 --password <app-specific-password>`; override with
-  `NOTARY_PROFILE=…`).
+  `NOTARY_PROFILE=…`). The name is deliberately not the app's: the credentials
+  belong to the Apple account, so every app here shares the one profile and a
+  new machine needs a single `store-credentials` run.
 - **DMG layout** (`Packaging/make-dmg.sh`): the image is built read/write, Finder
   is scripted to set the window (600×400, icon view, 128 pt icons, app at
   (150,175) and the `/Applications` symlink at (450,175)), then converted to
