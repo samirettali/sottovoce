@@ -17,7 +17,7 @@ final class DeepgramClient: NSObject, TranscriptionSession, URLSessionWebSocketD
     private let apiKey: String
     private let languages: [String]
     private let keywords: [String]
-    private let queue = DispatchQueue(label: "dev.samir.sottovoce.deepgram")
+    private let queue = DispatchQueue(label: "com.samirettali.sottovoce.deepgram")
     private lazy var urlSession = URLSession(
         configuration: .default, delegate: self, delegateQueue: nil
     )

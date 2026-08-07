@@ -15,7 +15,7 @@ class BatchTranscriptionClient: TranscriptionSession {
     var onError: ((String) -> Void)?
     var onFinished: (() -> Void)?
 
-    private let queue = DispatchQueue(label: "dev.samir.sottovoce.batch")
+    private let queue = DispatchQueue(label: "com.samirettali.sottovoce.batch")
     private var pcm = Data()
     private var finished = false
     private var cancelled = false

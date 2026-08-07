@@ -308,7 +308,7 @@ enum Prefs {
 // MARK: - Keychain
 
 enum KeychainStore {
-    private static let service = "dev.samir.sottovoce"
+    private static let service = "com.samirettali.sottovoce"
 
     private static func baseQuery(for provider: TranscriptionProvider) -> [String: Any] {
         [

@@ -1,6 +1,12 @@
 # Sottovoce
 
-(Formerly "Transcribe" — renamed 2026-08-01; bundle id `dev.samir.sottovoce`.)
+(Formerly "Transcribe" — renamed 2026-08-01; bundle id `com.samirettali.sottovoce`.)
+
+The bundle id changed from `dev.samir.sottovoce` on 2026-08-07, after 0.1.0 had
+shipped: reverse DNS of a domain actually owned. It is also the Keychain service
+string, so upgrading from 0.1.0 means re-granting Microphone and Accessibility,
+re-entering the API keys and losing the UserDefaults prefs — done deliberately
+while the only installation was the author's. The cask zaps both plists.
 
 macOS menu bar dictation app backed by OpenAI's `gpt-live-transcribe` realtime
 model. Hold a hotkey to dictate (push-to-talk), double-tap it to dictate
@@ -229,7 +235,7 @@ shows the current mode.
   background queue because a pending Automation-consent dialog would otherwise
   block the main thread (where the event tap lives). Needs
   `NSAppleEventsUsageDescription`; macOS prompts once per player.
-- **API key** lives in the Keychain (service `dev.samir.sottovoce`), not
+- **API key** lives in the Keychain (service `com.samirettali.sottovoce`), not
   UserDefaults. Other prefs are UserDefaults (`hotkeyKeyCode`,
   `overlayPosition`, `insertionMethod`, `playSounds`, `languages`).
 - Paste insertion saves/restores the clipboard (string flavor only) with a
