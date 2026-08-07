@@ -94,6 +94,8 @@ final class AppState: ObservableObject {
 
         promptForPermissions()
 
+        preloadLocalModelIfNeeded()
+
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil, queue: .main
@@ -187,6 +189,20 @@ final class AppState: ObservableObject {
 
     // MARK: - Session lifecycle
 
+    /// Brings the on-device models into memory ahead of time.
+    ///
+    /// Without this the first load happens inside `transcribe`, which for a
+    /// batch provider runs *after* the user stops speaking — so the first
+    /// dictation of every launch stalls with nothing on screen. Fire and
+    /// forget: a failure here is not worth reporting, the dictation path
+    /// retries and surfaces its own error.
+    func preloadLocalModelIfNeeded() {
+        guard Prefs.provider == .parakeet, ParakeetEngine.modelsDownloaded else { return }
+        Task.detached(priority: .utility) {
+            try? await ParakeetEngine.shared.prepare()
+        }
+    }
+
     private func startSession() {
         let provider = Prefs.provider
         let apiKey = KeychainStore.loadAPIKey(for: provider)
@@ -203,6 +219,10 @@ final class AppState: ObservableObject {
             showError("Sottovoce needs microphone access — grant it in System Settings.")
             return
         }
+
+        // Overlaps a cold load with the user speaking, which hides most of it.
+        // `loadTask` dedupes, so this costs nothing when already resident.
+        preloadLocalModelIfNeeded()
 
         insertedText = ""
         deltaText = ""
