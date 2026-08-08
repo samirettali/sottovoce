@@ -48,9 +48,14 @@ make run
    one to hear you, the other for the global hotkey and to type into other apps.
 
 Everything else is optional: dictation key, overlay corner, insertion method
-(simulated typing vs. paste), sounds, pausing media players while you dictate,
-and language hints. OpenAI additionally accepts a context prompt, literal
-keywords, and a latency/accuracy trade-off.
+(simulated typing vs. paste), whether each dictation stays on the clipboard,
+sounds, pausing media players while you dictate, and language hints. OpenAI
+additionally accepts a context prompt, literal keywords, and a latency/accuracy
+trade-off.
+
+Dictations don't reach your clipboard unless you ask for it: pasting borrows the
+clipboard for a moment and puts back what was there, and marks the text so
+clipboard managers leave it out of their history.
 
 ## Development
 
