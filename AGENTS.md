@@ -21,62 +21,27 @@ shows the current mode.
 - The `.app` bundle is required — TCC (mic + Accessibility) won't grant
   permissions to a bare executable. `Packaging/Info.plist` is copied into the
   bundle by the Makefile.
-- **Signing**: `make bundle` signs with `Developer ID Application` — the *same*
-  identity used for distribution, deliberately, so dev and release builds share
-  one designated requirement and the TCC grants / Keychain ACLs don't reset when
-  switching between them. Falls back to `Apple Development`, then ad-hoc, each
-  with a warning (`SIGN_IDENTITY=…` overrides).
-  A cert with a **real Team ID is required**: TCC grants survive any stable
-  designated requirement, but Keychain item ACLs use `teamid:`-based partition
-  lists — with a self-signed cert (no team ID) the identity degrades to the
-  per-binary cdhash and every rebuild re-prompts for the Keychain password,
-  even after "Always Allow" (tried and failed with a self-signed cert first).
-  Certs renew yearly; Team ID and leaf CN stay the same, so permissions and
-  Keychain access survive renewal.
-  The paid membership issues Developer ID certs under the same team as the
-  earlier free Apple ID (`22K9H4B864`), so the switch to Developer ID cost no
-  re-prompt and no re-grant of Microphone + Accessibility. (The `(272RW235BP)`
-  in the `Apple Development` cert's name is a certificate id, not the team —
-  only Developer ID cert names carry the Team ID in parentheses.)
-- **Hardened runtime** is on for every build (`--options runtime`), not just for
-  release, so dev builds hit the same restrictions the shipped app does. It
-  blocks the mic and outgoing Apple events unless claimed, hence
-  `Packaging/Sottovoce.entitlements`: `com.apple.security.device.audio-input`
-  and `com.apple.security.automation.apple-events`. **No App Sandbox** — the
-  CGEvent tap and Accessibility-based insertion can't work inside one.
-- **Release**: `make release` → notarised, stapled `dist/Sottovoce-<version>.dmg`.
-  It notarises *twice*, the app and then the DMG: the ticket stapled to a DMG
-  only covers the app while it's on the mounted image, so the app needs its own
-  ticket to launch offline after being dragged to /Applications. Needs a
-  notarytool keychain profile named `notary`
-  (`xcrun notarytool store-credentials notary --apple-id samir@ettali.com
-  --team-id 22K9H4B864 --password <app-specific-password>`; override with
-  `NOTARY_PROFILE=…`). The name is deliberately not the app's: the credentials
-  belong to the Apple account, so every app here shares the one profile and a
-  new machine needs a single `store-credentials` run.
-- **DMG layout** (`Packaging/make-dmg.sh`): the image is built read/write, Finder
-  is scripted to set the window (600×400, icon view, 128 pt icons, app at
-  (150,175) and the `/Applications` symlink at (450,175)), then converted to
-  compressed read-only. The layout lives in a `.DS_Store` *inside* the image, so
-  everyone sees the same window instead of their own Finder defaults.
-  - **No background art on purpose**: a background image is static, but Finder's
-    icon labels turn white in dark mode, so a light background with a drawn
-    arrow becomes unreadable. Position alone conveys the drag and survives both
-    appearances.
-  - HFS+, not the APFS default: it's the safer filesystem for a Finder-laid-out
-    DMG, and with `zlib-level=9` the image came out smaller too (2.6 MB vs 3.0).
-  - The volume is mounted **browsable** (no `-nobrowse`) because Finder has to
-    see it to script it, and the mount point is read back from `hdiutil` rather
-    than assumed — a stale `/Volumes/Sottovoce` would push the new one to
-    `Sottovoce 1` and the AppleScript would address the wrong disk.
-  - Scripting Finder needs Automation consent for whatever runs `make dmg`.
-- **Gotcha**: codesign failed with "unable to build chain to self-signed
-  root" + `errSecInternalComponent` because the machine only had the WWDR
-  **G1** intermediate (expired 2023) — Xcode created the cert but didn't
-  install the **G3** intermediate that issued it. Fixed by installing
-  https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer into the login
-  keychain (`security add-certificates`; no trust settings needed, it chains
-  to the Apple Root CA in the system roots).
+- **Signing, notarisation, DMG and cask** follow the shared setup documented in
+  the `macos-app-release` skill (Developer ID on dev builds too, hardened
+  runtime always, app and DMG notarised separately, releases built locally so
+  the key never reaches CI). `make release` → `dist/Sottovoce-<version>.dmg`.
+  Only what is specific to Sottovoce is repeated here:
+  - **Entitlements** (`Packaging/Sottovoce.entitlements`): the hardened runtime
+    blocks the mic and outgoing Apple events unless claimed, hence
+    `com.apple.security.device.audio-input` and
+    `com.apple.security.automation.apple-events`. **No App Sandbox** — the
+    CGEvent tap and Accessibility-based insertion can't work inside one.
+  - The signing identity matters more here than for an app without permissions:
+    a self-signed cert was tried first and every rebuild re-prompted for the
+    Keychain password even after "Always Allow", because Keychain ACLs use
+    `teamid:` partition lists. The paid membership issues Developer ID certs
+    under the same team as the earlier free Apple ID (`22K9H4B864`), so the
+    switch cost no re-grant of Microphone + Accessibility. (The `(272RW235BP)`
+    in the `Apple Development` cert's name is a certificate id, not the team —
+    only Developer ID cert names carry the Team ID in parentheses.)
+  - `Packaging/make-dmg.sh` is a copy of the canonical one in the skill;
+    `/Volumes/Sottovoce` is the volume it lays out. At `zlib-level=9` the image
+    came out smaller on HFS+ than on APFS too (2.6 MB vs 3.0).
 
 ## Non-obvious decisions
 
