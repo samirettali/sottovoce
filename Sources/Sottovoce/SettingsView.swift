@@ -17,6 +17,7 @@ struct SettingsView: View {
     @AppStorage(PrefKey.overlayPosition) private var positionRaw = OverlayPosition.bottomCenter.rawValue
     @AppStorage(PrefKey.showIdleOverlay) private var showIdleOverlay = false
     @AppStorage(PrefKey.insertionMethod) private var insertionRaw = InsertionMethod.type.rawValue
+    @AppStorage(PrefKey.keepInClipboard) private var keepInClipboard = false
     @AppStorage(PrefKey.playSounds) private var playSounds = true
     @AppStorage(PrefKey.pauseMediaWhileDictating) private var pauseMedia = false
     @AppStorage(PrefKey.languages) private var languagesRaw = ""
@@ -435,12 +436,13 @@ struct SettingsView: View {
                     Text(method.label).tag(method.rawValue)
                 }
             }
+            Toggle("Keep dictations in the clipboard", isOn: $keepInClipboard)
             Toggle("Play sounds", isOn: $playSounds)
             Toggle("Pause media while dictating", isOn: $pauseMedia)
         } header: {
             Text("Output")
         } footer: {
-            Text("Pauses Spotify, Music and VLC if they are playing, and resumes them when you stop. macOS will ask once to allow controlling each player.")
+            Text("Off, pasting only borrows the clipboard and puts back what was there, marking the text so clipboard managers don't record it.\n\nPausing media covers Spotify, Music and VLC if they are playing, and resumes them when you stop. macOS will ask once to allow controlling each player.")
         }
     }
 

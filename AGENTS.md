@@ -207,3 +207,11 @@ shows the current mode.
   `overlayPosition`, `insertionMethod`, `playSounds`, `languages`).
 - Paste insertion saves/restores the clipboard (string flavor only) with a
   0.4 s delay; back-to-back segments keep the *original* user clipboard.
+  The borrowed clipboard also carries `org.nspasteboard.TransientType` and
+  `ConcealedType` ([nspasteboard.org](https://nspasteboard.org)), so clipboard
+  managers that honour them don't retain a dictation that is only passing
+  through — the same reason the Recent Dictations list is memory-only.
+  `keepInClipboard` (Settings → Output, default off) inverts this: the
+  transcript is left on the clipboard and the restore is skipped, and with
+  `type` insertion `TextInserter.copy` puts it there, so the preference means
+  the same thing whichever insertion method is selected.

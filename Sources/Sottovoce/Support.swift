@@ -132,6 +132,7 @@ enum PrefKey {
     static let showIdleOverlay = "showIdleOverlay"
     static let inputDeviceUID = "inputDeviceUID"
     static let insertionMethod = "insertionMethod"
+    static let keepInClipboard = "keepInClipboard"
     static let playSounds = "playSounds"
     static let pauseMediaWhileDictating = "pauseMediaWhileDictating"
     static let languages = "languages"
@@ -219,6 +220,7 @@ enum Prefs {
             PrefKey.showIdleOverlay: false,
             PrefKey.inputDeviceUID: "",
             PrefKey.insertionMethod: InsertionMethod.type.rawValue,
+            PrefKey.keepInClipboard: false,
             PrefKey.playSounds: true,
             PrefKey.pauseMediaWhileDictating: false,
             PrefKey.languages: "",
@@ -253,6 +255,13 @@ enum Prefs {
     static var insertionMethod: InsertionMethod {
         get { InsertionMethod(rawValue: defaults.string(forKey: PrefKey.insertionMethod) ?? "") ?? .paste }
         set { defaults.set(newValue.rawValue, forKey: PrefKey.insertionMethod) }
+    }
+
+    /// Whether a dictation stays on the clipboard once it has been inserted.
+    /// Off, the clipboard is only borrowed by `paste` insertion and restored.
+    static var keepInClipboard: Bool {
+        get { defaults.bool(forKey: PrefKey.keepInClipboard) }
+        set { defaults.set(newValue, forKey: PrefKey.keepInClipboard) }
     }
 
     static var playSounds: Bool {

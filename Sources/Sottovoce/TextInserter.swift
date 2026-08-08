@@ -7,11 +7,26 @@ enum TextInserter {
     private static var savedClipboard: String?
     private static var restoreWork: DispatchWorkItem?
 
+    /// Markers from <https://nspasteboard.org>: clipboard managers that honour
+    /// them leave the entry out of their history. Set while `paste` borrows the
+    /// clipboard, so a dictation only passing through isn't retained by a third
+    /// party — dictated text can be sensitive, which is also why the Recent
+    /// Dictations list is memory-only.
+    private static let transientMarkers: [NSPasteboard.PasteboardType] = [
+        .init("org.nspasteboard.TransientType"),
+        .init("org.nspasteboard.ConcealedType"),
+    ]
+
     static func insert(_ text: String) {
         guard !text.isEmpty else { return }
         switch Prefs.insertionMethod {
-        case .paste: paste(text)
-        case .type: type(text)
+        case .paste:
+            paste(text)
+        case .type:
+            type(text)
+            // Typing never touches the clipboard, so the preference has to put
+            // the text there itself for the two methods to mean the same thing.
+            if Prefs.keepInClipboard { copy(text) }
         }
     }
 
@@ -19,16 +34,31 @@ enum TextInserter {
 
     private static func paste(_ text: String) {
         let pasteboard = NSPasteboard.general
+        let keep = Prefs.keepInClipboard
+
         // If a restore is still pending we already hold the user's original
         // clipboard; don't overwrite it with our own previous segment.
-        if restoreWork == nil {
+        if !keep, restoreWork == nil {
             savedClipboard = pasteboard.string(forType: .string)
         }
         restoreWork?.cancel()
+        restoreWork = nil
 
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
+        if !keep {
+            for marker in transientMarkers {
+                pasteboard.setString("", forType: marker)
+            }
+        }
         postKeystroke(keyCode: 9, flags: .maskCommand) // ⌘V
+
+        // Keeping it means there is nothing to restore: whatever was on the
+        // clipboard before is deliberately gone.
+        guard !keep else {
+            savedClipboard = nil
+            return
+        }
 
         let work = DispatchWorkItem {
             restoreWork = nil
@@ -40,6 +70,13 @@ enum TextInserter {
         }
         restoreWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
+    }
+
+    /// Deliberate copy: no transient markers, the point is for it to be kept.
+    private static func copy(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
     }
 
     private static func postKeystroke(keyCode: CGKeyCode, flags: CGEventFlags) {
