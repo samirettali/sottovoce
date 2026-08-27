@@ -243,6 +243,18 @@ final class AppState: ObservableObject {
             var options = TranscriptionClient.Options.fromPrefs()
             options.prompt = composedContextPrompt()
             client = TranscriptionClient(apiKey: key, options: options)
+        case .geminiLive:
+            client = GeminiLiveClient(
+                apiKey: key,
+                languages: Prefs.languages,
+                keywords: Prefs.transcriptionKeywords
+            )
+        case .gemini:
+            client = GeminiClient(
+                apiKey: key,
+                languages: Prefs.languages,
+                keywords: Prefs.transcriptionKeywords
+            )
         case .deepgram:
             client = DeepgramClient(
                 apiKey: key,

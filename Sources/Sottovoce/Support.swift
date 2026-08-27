@@ -7,7 +7,9 @@ import Security
 
 enum TranscriptionProvider: String, CaseIterable, Identifiable {
     case openai
+    case geminiLive
     case deepgram
+    case gemini
     case groq
     case fishAudio
     case parakeet
@@ -17,7 +19,9 @@ enum TranscriptionProvider: String, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .openai: return "OpenAI"
+        case .geminiLive: return "Gemini Live"
         case .deepgram: return "Deepgram"
+        case .gemini: return "Gemini"
         case .groq: return "Groq"
         case .fishAudio: return "Fish Audio"
         case .parakeet: return "On-device"
@@ -27,7 +31,9 @@ enum TranscriptionProvider: String, CaseIterable, Identifiable {
     var menuLabel: String {
         switch self {
         case .openai: return "OpenAI — gpt-live-transcribe (live)"
+        case .geminiLive: return "Gemini — 3.5 Transcribe Live (streaming)"
         case .deepgram: return "Deepgram — nova-3 (streaming)"
+        case .gemini: return "Gemini — 3.5 Transcribe (batch)"
         case .groq: return "Groq — Whisper large-v3 turbo (batch)"
         case .fishAudio: return "Fish Audio — ASR (batch)"
         case .parakeet: return "On-device — Parakeet TDT v3 (offline)"
@@ -40,6 +46,9 @@ enum TranscriptionProvider: String, CaseIterable, Identifiable {
     var keychainAccount: String {
         switch self {
         case .openai: return "openai-api-key"
+        // Both Gemini providers take the same AI Studio key, so they share one
+        // Keychain item: entering it under either one enables both.
+        case .gemini, .geminiLive: return "gemini-api-key"
         case .deepgram: return "deepgram-api-key"
         case .groq: return "groq-api-key"
         case .fishAudio: return "fishaudio-api-key"
@@ -74,6 +83,28 @@ enum TranscriptionProvider: String, CaseIterable, Identifiable {
                 contextPrompt: true,
                 delayTuning: true,
                 pricing: "$0.017/min"
+            )
+        case .geminiLive:
+            return Capabilities(
+                insertion: "By phrase",
+                livePreview: true,
+                codeSwitching: true,
+                languageHints: "Several or auto",
+                keywords: true,
+                contextPrompt: false,
+                delayTuning: false,
+                pricing: "$0.005/min"
+            )
+        case .gemini:
+            return Capabilities(
+                insertion: "On stop",
+                livePreview: false,
+                codeSwitching: true,
+                languageHints: "Several or auto",
+                keywords: true,
+                contextPrompt: false,
+                delayTuning: false,
+                pricing: "$0.003/min"
             )
         case .deepgram:
             return Capabilities(
