@@ -59,9 +59,11 @@ struct SettingsView: View {
                 .formStyle(.grouped)
                 .tabItem { Label("Overlay", systemImage: "macwindow") }
         }
-        // Wide enough for the comparison grid's five provider columns, tall
-        // enough for the Providers tab with the model row at full height.
-        .frame(width: 620, height: 528)
+        // Wide enough for the comparison grid's seven provider columns — the
+        // widest cell ("Several or auto") measures 73 pt at 10 pt, so each
+        // column needs ~78 pt — tall enough for the Providers tab with the
+        // model row at full height.
+        .frame(width: 760, height: 528)
         // The app is LSUIElement, so it normally has no Dock icon at all.
         // While Settings is open, promote it to a regular app so the window
         // can be reached from the Dock and ⌘-Tab, then drop back to a menu
@@ -98,6 +100,7 @@ struct SettingsView: View {
         switch provider {
         case .openai: return "sk-…"
         case .groq: return "gsk_…"
+        case .gemini, .geminiLive: return "AIza…"
         case .deepgram, .fishAudio: return "key…"
         case .parakeet: return ""
         }

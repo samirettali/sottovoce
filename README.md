@@ -14,12 +14,14 @@ Requires macOS 14 or later.
 ## Providers
 
 Pick one in Settings → Providers. Each keeps its own API key, so you can switch
-without re-entering anything.
+without re-entering anything — the two Gemini providers share one AI Studio key.
 
 | Provider | Model | How text arrives |
 | --- | --- | --- |
 | OpenAI | `gpt-live-transcribe` | live, word by word while you speak |
+| Gemini Live | `gemini-3.5-transcribe-live` | streaming, inserted phrase by phrase |
 | Deepgram | `nova-3` | streaming, inserted phrase by phrase |
+| Gemini | `gemini-3.5-transcribe` | on release, in one go |
 | Groq | `whisper-large-v3-turbo` | on release, in one go |
 | Fish Audio | ASR | on release, in one go |
 | On-device | Parakeet TDT 0.6B v3 | on release, in one go |

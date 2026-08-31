@@ -47,10 +47,12 @@ shows the current mode.
 
 - **Provider abstraction**: dictation goes through the `TranscriptionSession`
   protocol. Streaming providers: OpenAI (`TranscriptionClient`, append-only
-  live deltas → typed live) and Deepgram (`DeepgramClient`, nova-3 over
-  `wss://api.deepgram.com/v1/listen`, raw binary PCM frames, `Token` auth).
+  live deltas → typed live), Deepgram (`DeepgramClient`, nova-3 over
+  `wss://api.deepgram.com/v1/listen`, raw binary PCM frames, `Token` auth) and
+  Gemini Live (`GeminiLiveClient`, see below).
   Batch providers subclass `BatchTranscriptionClient` (PCM buffered in
-  memory, WAV+multipart upload on stop, 30 min cap): Groq
+  memory, WAV+multipart upload on stop, 30 min cap): Gemini
+  (`GeminiClient`, see below), Groq
   (`whisper-large-v3-turbo`, OpenAI-compatible endpoint) and Fish Audio
   (`POST /v1/asr`; **no realtime ASR** — their WebSocket API is TTS-only and
   `s2.1-pro` is a TTS model; OpenRouter likewise has no realtime STT).
@@ -105,6 +107,53 @@ shows the current mode.
   final flush (`Metadata` event) or socket close. Language: `multi` unless
   exactly one language hint is configured.
 
+- **Gemini 3.5 Transcribe** (added 2026-08-27, both variants of a model in
+  public preview). One AI Studio key covers both, so they deliberately share
+  the Keychain account `gemini-api-key` — entering it under either enables
+  both. Both send `mode: SMART`, which strips disfluencies and formats the
+  text; `verbatim` would type every "uhm" out. Keywords map to
+  `customVocabulary` (1000 terms max, ~100 optimal); there is no context
+  prompt and no latency knob.
+  - `GeminiLiveClient` — `gemini-3.5-transcribe-live` over the generic Live
+    API socket (`…GenerativeService.BidiGenerateContent?key=`, key in the
+    query string, not a header). Nothing may be sent until the server answers
+    the `setup` frame with `setupComplete`, so audio is queued exactly like
+    OpenAI's pre-`session.updated` buffer. Delta semantics are Deepgram's
+    under other names: `serverContent.interimInputTranscription` restates the
+    segment in progress from its start (→ `onInterim`, display only) and
+    `serverContent.inputTranscription` is one stable segment, per pause and
+    never cumulative (→ `onCompleted`).
+    - **Ending the stream is the fiddly part.** `finish()` sends
+      `{"realtimeInput":{"audioStreamEnd":true}}`, and `turnComplete` — which
+      the general Live API docs point at — *never arrives for this model*.
+      What closes a segment is `generationComplete`, which also fires at every
+      pause mid-dictation, so it only means "done" while finishing.
+      Worse, when the last segment was already finalized before
+      `audioStreamEnd` (a dictation ended on a beat of silence) the server
+      sends **nothing at all** and never closes the socket, so a timeout is
+      the only way out. Hence two waits: 5 s when an interim is still open,
+      0.8 s when none is — measured, a final lands 0.2–0.3 s after
+      `audioStreamEnd`, and a one-word dictation can produce a final with no
+      interim before it at all, which is why the short wait exists rather
+      than closing immediately.
+    - **24 kHz, though the docs say 16**: the rate travels in the mime type
+      and the server accepts the capture's own 24 kHz (verified). A resampler
+      was written first and then deleted — no other provider needs one.
+    - Sessions are capped at 10 minutes.
+    - Quota and billing failures arrive as a WebSocket **close reason**, not
+      as an error frame, hence the close reason being surfaced verbatim.
+  - `GeminiClient` — `gemini-3.5-transcribe` over the Interactions API.
+    Inline base64 audio (`input[].data`) works and is what a normal dictation
+    uses, even though the docs only show audio passed by reference. Past
+    12 MB of WAV (~4 min) the request would blow the ~20 MB body limit, so it
+    falls back to the documented path: Files API resumable upload (`start`,
+    then `upload, finalize`, the target URL coming back in the
+    `X-Goog-Upload-URL` header), transcribe by `uri`, delete the file (they
+    would expire in 48 h anyway). A file still `PROCESSING` is polled to
+    `ACTIVE`, since the Interactions API rejects it otherwise — short audio
+    comes back `ACTIVE` straight from the upload.
+    - The transcript is read from `steps[].content[].text`. The `output_text`
+      the docs mention is synthesised by the SDKs and is not on the wire.
 - **Wire protocol** (docs pages are thin; assembled from the realtime
   transcription guide): WebSocket to
   `wss://api.openai.com/v1/realtime?intent=transcription` with
