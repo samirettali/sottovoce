@@ -13,6 +13,11 @@ let package = Package(
             name: "Sottovoce",
             dependencies: [.product(name: "FluidAudio", package: "FluidAudio")],
             path: "Sources/Sottovoce"
-        )
+        ),
+        .testTarget(
+            name: "SottovoceTests",
+            dependencies: ["Sottovoce"],
+            path: "Tests/SottovoceTests"
+        ),
     ]
 )

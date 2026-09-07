@@ -55,6 +55,8 @@ struct SettingsView: View {
             Form { transcriptionSection }
                 .formStyle(.grouped)
                 .tabItem { Label("Transcription", systemImage: "waveform") }
+            VocabularySettingsView()
+                .tabItem { Label("Vocabulary", systemImage: "character.book.closed") }
             Form { overlaySection }
                 .formStyle(.grouped)
                 .tabItem { Label("Overlay", systemImage: "macwindow") }
@@ -384,7 +386,7 @@ struct SettingsView: View {
         } header: {
             Text("Transcription")
         } footer: {
-            Text("Delay trades latency for accuracy (OpenAI only). Keywords (comma-separated) help with product names and acronyms — used by OpenAI, Deepgram and Groq. The context prompt goes to OpenAI and Groq. Languages: Deepgram and OpenAI handle several; Groq, Fish Audio and On-device take only the first, so leave the field empty with those for auto-detection. Changes apply from the next dictation.")
+            Text("Delay trades latency for accuracy (OpenAI only). Keywords (comma-separated) help with product names and acronyms — used by OpenAI, Gemini, Deepgram and Groq; what they still get wrong, fix in Vocabulary. The context prompt goes to OpenAI and Groq. Languages: Deepgram and OpenAI handle several; Groq, Fish Audio and On-device take only the first, so leave the field empty with those for auto-detection. Changes apply from the next dictation.")
         }
     }
 

@@ -170,6 +170,9 @@ enum PrefKey {
     static let transcriptionPrompt = "transcriptionPrompt"
     static let transcriptionKeywords = "transcriptionKeywords"
     static let transcriptionDelay = "transcriptionDelay"
+    static let removeFillers = "removeFillers"
+    static let fillerWords = "fillerWords"
+    static let vocabularyRules = "vocabularyRules"
 }
 
 enum TranscriptionDelay: String, CaseIterable, Identifiable {
@@ -258,6 +261,9 @@ enum Prefs {
             PrefKey.transcriptionPrompt: "",
             PrefKey.transcriptionKeywords: "",
             PrefKey.transcriptionDelay: "",
+            PrefKey.removeFillers: true,
+            PrefKey.fillerWords: "ehm, uhm, um, uh",
+            PrefKey.vocabularyRules: Data("[]".utf8),
         ])
     }
 
@@ -342,6 +348,45 @@ enum Prefs {
     static var transcriptionDelay: TranscriptionDelay {
         get { TranscriptionDelay(rawValue: defaults.string(forKey: PrefKey.transcriptionDelay) ?? "") ?? .apiDefault }
         set { defaults.set(newValue.rawValue, forKey: PrefKey.transcriptionDelay) }
+    }
+
+    static var removeFillers: Bool {
+        get { defaults.bool(forKey: PrefKey.removeFillers) }
+        set { defaults.set(newValue, forKey: PrefKey.removeFillers) }
+    }
+
+    /// Comma-separated words dropped from the transcript when `removeFillers` is on.
+    static var fillerWords: [String] {
+        get {
+            (defaults.string(forKey: PrefKey.fillerWords) ?? "")
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        }
+        set { defaults.set(newValue.joined(separator: ", "), forKey: PrefKey.fillerWords) }
+    }
+
+    /// Replacement rules, stored as JSON. Rules with an empty phrase are
+    /// unfinished rows in Settings and are skipped here.
+    static var vocabularyRules: [VocabularyRule] {
+        get {
+            guard let data = defaults.data(forKey: PrefKey.vocabularyRules),
+                  let rules = try? JSONDecoder().decode([VocabularyRule].self, from: data) else { return [] }
+            return rules
+        }
+        set {
+            guard let data = try? JSONEncoder().encode(newValue) else { return }
+            defaults.set(data, forKey: PrefKey.vocabularyRules)
+        }
+    }
+
+    /// The pipeline for one dictation, built from the current preferences.
+    static func makeVocabularyPipeline(sentenceStart: Bool) -> VocabularyPipeline {
+        VocabularyPipeline(
+            rules: vocabularyRules.filter { !$0.phrase.trimmingCharacters(in: .whitespaces).isEmpty },
+            fillers: removeFillers ? fillerWords : [],
+            sentenceStart: sentenceStart
+        )
     }
 }
 

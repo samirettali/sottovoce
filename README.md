@@ -55,6 +55,11 @@ sounds, pausing media players while you dictate, and language hints. OpenAI
 additionally accepts a context prompt, literal keywords, and a latency/accuracy
 trade-off.
 
+What a provider keeps mishearing, fix once in Settings → Vocabulary: filler
+words are dropped, and "phrase → replacement" rules rewrite the transcript
+before it is inserted, whatever the provider. A rule whose replacement is a
+whole block works as a snippet.
+
 Dictations don't reach your clipboard unless you ask for it: pasting borrows the
 clipboard for a moment and puts back what was there, and marks the text so
 clipboard managers leave it out of their history.

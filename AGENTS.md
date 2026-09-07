@@ -187,6 +187,35 @@ shows the current mode.
     pasted once on stop.
   On stop, a manual `input_audio_buffer.commit` flushes the buffer; "buffer
   too small/empty commit" API errors are expected then and silently ignored.
+- **Vocabulary pipeline** (`Vocabulary.swift`, Settings → Vocabulary): filler
+  removal and the user's "phrase → replacement" rules, applied to every
+  provider's output between the client and `TextInserter`. It is the
+  corrective layer for what Keywords don't prevent (`beatwarden` →
+  `Bitwarden`); a rule with a long or multi-line replacement doubles as a
+  snippet. Matching is whole-word, case-insensitive, longest phrase first;
+  the punctuation around a matched phrase is kept, and a replacement written
+  in lowercase takes a capital when the misheard word had one.
+  - **Live typing holds back words.** Deltas are typed as they arrive, so a
+    phrase straddling two deltas could not be fixed once its head is in the
+    target app. `push` releases only what no rule can still change: the last
+    K complete words (K = longest phrase) and any word not yet closed by
+    whitespace stay in `pending` until the next delta or `flush`. With no
+    rules and fillers off the pipeline is a pass-through, so latency is
+    unchanged. `AppState` compares the final transcript against `itemRaw`
+    (the deltas as received) rather than against what was typed, since the
+    two no longer coincide; the tail then goes through the pipeline too.
+  - Paste mode and per-segment providers run the whole text through
+    `process` at once. Segments are not held back across each other, so a
+    phrase split by a Deepgram/Gemini pause is missed — accepted.
+  - Fillers are rules with an empty replacement: the matched words go, a
+    filler that opened the text takes the next word's leading space with it,
+    and one that opened a sentence hands its capital to the next word.
+  - Rules are JSON in UserDefaults (`vocabularyRules`); fillers are a
+    comma-separated string (`fillerWords`) behind the `removeFillers` toggle,
+    on by default with "ehm, uhm, um, uh".
+  - `swift test` covers the pipeline (`Tests/SottovoceTests`); it is the only
+    test target, added for this because the holdback is easy to get subtly
+    wrong and impossible to check by dictating.
 - **Hotkey**: a CGEvent tap on the main run loop (needs Accessibility).
   Modifier hotkeys (default: Right ⌥) are tracked via `flagsChanged` and never
   swallowed; regular-key hotkeys are swallowed (down and up) unless pressed
