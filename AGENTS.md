@@ -57,7 +57,12 @@ shows the current mode.
   (`POST /v1/asr`; **no realtime ASR** — their WebSocket API is TTS-only and
   `s2.1-pro` is a TTS model; OpenRouter likewise has no realtime STT).
   Per-provider API keys are separate Keychain accounts under the same
-  service. Delay/keywords/context-prompt options are OpenAI-only.
+  service. Delay and the context prompt are OpenAI-only. Keywords are one
+  field sent wherever the API takes a vocabulary: OpenAI `keywords`, Gemini
+  `customVocabulary`/`custom_vocabulary` (1000 max), Deepgram `keyterm`;
+  Groq folds them into the Whisper prompt (a weak bias, not a vocabulary);
+  Parakeet scores them against the audio with a second model (see the
+  on-device provider); Fish Audio ignores them.
 - **On-device provider** (`parakeet`): Parakeet TDT 0.6B v3 on CoreML/ANE via
   [FluidAudio](https://github.com/FluidInference/FluidAudio). Chosen over
   Whisper (WhisperKit) because it beats large-v3 on accuracy at a quarter of
@@ -93,10 +98,36 @@ shows the current mode.
     `deliver`/`fail` so on-device providers reuse the buffering without the
     HTTP path. No live preview; ~110× realtime, so a normal dictation resolves
     in a fraction of a second.
-  - Keywords/context-prompt don't apply: Parakeet has no prompt conditioning.
-    FluidAudio does ship CTC keyword spotting + vocabulary rescoring
-    (`CustomVocabularyContext`), which is the path to wire up if the Keywords
-    field should ever work here.
+  - **Keywords work through a second model** (`VocabularyBoost` in
+    `LocalASR.swift`), not through prompting: a transducer cannot be asked
+    how likely a given word is at a given point. FluidAudio's Parakeet CTC
+    110M head gives per-frame posteriors any term can be aligned against, so
+    the TDT transcript is kept and `VocabularyRescorer.ctcTokenRescore` swaps
+    a word for a keyword only when the audio supports it. Greedy CTC
+    decoding is useless by design (~113% WER per the library's own note):
+    the models score, they never transcribe. This is the library's batch
+    path (`TranscribeCommand.runBatch` in its CLI), so `ParakeetEngine` stays
+    batch and nothing about insertion changes; the sliding-window manager is
+    only needed for streaming.
+    - The CTC models are a **separate download** (Settings → Providers,
+      second section), cached by FluidAudio next to the TDT ones; without
+      them keywords are silently ignored, and with an empty Keywords field
+      the pass never runs. `CtcModels.download` reports no progress, hence
+      the spinner. Any failure in the pass logs and returns the plain
+      transcript: a boost must never cost a dictation.
+    - The boost is built for one keyword list and kept resident with the
+      models; a changed list rebuilds it on the next dictation. Thresholds
+      come from `ContextBiasingConstants.rescorerConfig(forVocabSize:)`,
+      which tightens as the list grows.
+    - **The library defaults over-fire on short lists.** Its "spotter
+      rescue" replaces a word on acoustic evidence alone, with no
+      string-similarity floor; with the single keyword "Hammerspoon" it
+      rewrote a clearly spoken "Bitwarden". `VocabularyBoost.rescorerConfig`
+      applies the short-vocab values the library's own notes recommend
+      (cbw taper pivot 5 / exponent 2, rescue floors 0.30 single-word / 0.50
+      multi-word). A name the TDT mangled still gets recovered as long as
+      it resembles the keyword; an unrelated word no longer does.
+    - The context prompt still doesn't apply.
   - `TranscriptionProvider.requiresAPIKey` gates the Keychain check in
     `AppState.startSession` and the first-run "open Settings" nudge.
 - **Deepgram delta semantics**: interims are *revisions*, not append-only
@@ -183,6 +214,44 @@ shows the current mode.
     pasted once on stop.
   On stop, a manual `input_audio_buffer.commit` flushes the buffer; "buffer
   too small/empty commit" API errors are expected then and silently ignored.
+- **Vocabulary pipeline** (`Vocabulary.swift`, Settings → Vocabulary): filler
+  removal and the user's "phrase → replacement" rules, applied to every
+  provider's output between the client and `TextInserter`. It is the
+  corrective layer for what Keywords don't prevent (`beatwarden` →
+  `Bitwarden`); a rule with a long or multi-line replacement doubles as a
+  snippet. Matching is whole-word, case-insensitive, longest phrase first;
+  the punctuation around a matched phrase is kept, and a replacement written
+  in lowercase takes a capital when the misheard word had one.
+  - **Live typing holds back words.** Deltas are typed as they arrive, so a
+    phrase straddling two deltas could not be fixed once its head is in the
+    target app. `push` releases only what no rule can still change: the last
+    K complete words (K = longest phrase) and any word not yet closed by
+    whitespace stay in `pending` until the next delta or `flush`. With no
+    rules and fillers off the pipeline is a pass-through, so latency is
+    unchanged. `AppState` compares the final transcript against `itemRaw`
+    (the deltas as received) rather than against what was typed, since the
+    two no longer coincide; the tail then goes through the pipeline too.
+  - Paste mode and per-segment providers run the whole text through
+    `process` at once. Segments are not held back across each other, so a
+    phrase split by a Deepgram/Gemini pause is missed — accepted.
+  - Fillers are rules with an empty replacement: the matched words go, a
+    filler that opened the text takes the next word's leading space with it,
+    and one that opened a sentence hands its capital to the next word.
+  - **Voice commands** are rules of kind `key`: the phrase is dropped
+    together with the whitespace around it and `TextInserter.press`
+    synthesises the keystroke (Return, Return twice, Tab, ⌘Return) with the
+    same marked CGEvents as ⌘V. `AppState` records a newline (or tab) in
+    `insertedText` so the preview and history show the break and the next
+    word gets no joining space. Every install starts with "a capo" / "new
+    line" → Return and "nuovo paragrafo" / "new paragraph" → Return twice,
+    seeded through `registerDefaults` so deleting them sticks.
+  - Rules are JSON in UserDefaults (`vocabularyRules`); rules saved before
+    commands existed decode with `kind` defaulting to `replace`. Fillers are
+    a comma-separated string (`fillerWords`) behind the `removeFillers`
+    toggle, on by default with "ehm, uhm, um, uh".
+  - `swift test` covers the pipeline (`Tests/SottovoceTests`); it is the only
+    test target, added for this because the holdback is easy to get subtly
+    wrong and impossible to check by dictating.
 - **Hotkey**: a CGEvent tap on the main run loop (needs Accessibility).
   Modifier hotkeys (default: Right ⌥) are tracked via `flagsChanged` and never
   swallowed; regular-key hotkeys are swallowed (down and up) unless pressed

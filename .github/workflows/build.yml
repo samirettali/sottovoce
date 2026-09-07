@@ -30,6 +30,9 @@ jobs:
       - name: Build
         run: swift build -c release
 
+      - name: Test
+        run: swift test
+
       # Catches breakage in Info.plist, the icon and the bundle layout, which a
       # plain `swift build` wouldn't. Signing falls back to ad-hoc here, since
       # no identity exists on the runner.

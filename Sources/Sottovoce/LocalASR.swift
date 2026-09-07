@@ -20,6 +20,9 @@ actor ParakeetEngine {
     /// In-flight load, so a dictation started while Settings is downloading
     /// waits for that same work instead of kicking off a second download.
     private var loadTask: Task<AsrManager, Error>?
+    /// The keyword boost for the current Keywords list, kept resident like
+    /// the models; rebuilt when the list changes.
+    private var boost: VocabularyBoost?
 
     private let converter = AudioConverter()
 
@@ -30,6 +33,11 @@ actor ParakeetEngine {
 
     nonisolated static var cacheDirectory: URL {
         AsrModels.defaultCacheDirectory(for: version)
+    }
+
+    /// Whether the CTC models the keyword boost needs are on disk.
+    nonisolated static var boostModelsDownloaded: Bool {
+        CtcModels.modelsExist(at: VocabularyBoost.cacheDirectory)
     }
 
     /// Bytes the installed model occupies. The `.mlmodelc` bundles are
@@ -57,18 +65,42 @@ actor ParakeetEngine {
         _ = try await loadedManager(progress: progress)
     }
 
+    /// Downloads the CTC models for the keyword boost if missing.
+    func prepareBoost() async throws {
+        try await CtcModels.download(to: VocabularyBoost.cacheDirectory)
+    }
+
     /// Transcribes 24 kHz mono PCM16 (the format `AudioCapture` produces).
-    func transcribe(pcm24k: Data, language: Language?) async throws -> String {
+    /// `keywords` are boosted through the CTC pass when its models are on
+    /// disk; a failure there logs and returns the plain transcript.
+    func transcribe(pcm24k: Data, language: Language?, keywords: [String] = []) async throws -> String {
         let manager = try await loadedManager()
         let samples = try converter.resample(Self.floatSamples(fromPCM16: pcm24k), from: 24_000)
         var state = TdtDecoderState.make(decoderLayers: await manager.decoderLayerCount)
         let result = try await manager.transcribe(samples, decoderState: &state, language: language)
-        return result.text
+
+        guard !keywords.isEmpty, Self.boostModelsDownloaded,
+              let timings = result.tokenTimings, !timings.isEmpty else { return result.text }
+        do {
+            let boost = try await loadedBoost(for: keywords)
+            return try await boost.rescore(result.text, timings: timings, samples: samples)
+        } catch {
+            NSLog("Keyword boost skipped: \(error.localizedDescription)")
+            return result.text
+        }
     }
 
     /// Frees the CoreML models; the next dictation reloads them.
     func unload() {
         manager = nil
+        boost = nil
+    }
+
+    private func loadedBoost(for keywords: [String]) async throws -> VocabularyBoost {
+        if let boost, boost.keywords == keywords { return boost }
+        let boost = try await VocabularyBoost(keywords: keywords)
+        self.boost = boost
+        return boost
     }
 
     // MARK: - Loading
@@ -102,6 +134,124 @@ actor ParakeetEngine {
             let samples = raw.bindMemory(to: Int16.self)
             return samples.map { Float(Int16(littleEndian: $0)) / 32_768.0 }
         }
+    }
+}
+
+// MARK: - Keyword boost
+
+/// Makes the Keywords list count for the on-device model.
+///
+/// Parakeet TDT is a transducer: it cannot be asked how likely a given word
+/// is at a given point, so keywords cannot condition its decoding. FluidAudio
+/// ships a separate CTC head (Parakeet CTC 110M) whose per-frame posteriors
+/// let any term be aligned against the audio and scored. The transcript is
+/// still the TDT one; the CTC pass only decides, term by term, whether a word
+/// the TDT got wrong sounds enough like a keyword to be swapped. Greedy CTC
+/// decoding is useless by design (~113% WER, per the library) — the models
+/// exist to score, not to transcribe.
+private struct VocabularyBoost {
+    let keywords: [String]
+    private let vocabulary: CustomVocabularyContext
+    private let spotter: CtcKeywordSpotter
+    private let rescorer: VocabularyRescorer
+
+    static var cacheDirectory: URL { CtcModels.defaultCacheDirectory(for: .ctc110m) }
+
+    /// Loads the CTC models (already downloaded) and tokenises the keywords
+    /// with the CTC tokenizer, as the library's own batch path does.
+    init(keywords: [String]) async throws {
+        let directory = Self.cacheDirectory
+        let models = try await CtcModels.load(from: directory, variant: .ctc110m)
+        let tokenizer = try await CtcTokenizer.load(from: directory)
+        let terms = keywords.compactMap { keyword -> CustomVocabularyTerm? in
+            let ids = tokenizer.encode(keyword)
+            guard !ids.isEmpty else { return nil }
+            return CustomVocabularyTerm(text: keyword, ctcTokenIds: ids)
+        }
+        let vocabulary = CustomVocabularyContext(terms: terms)
+        let spotter = CtcKeywordSpotter(models: models, blankId: models.vocabulary.count)
+        self.keywords = keywords
+        self.vocabulary = vocabulary
+        self.spotter = spotter
+        self.rescorer = try await VocabularyRescorer.create(
+            spotter: spotter, vocabulary: vocabulary, config: Self.rescorerConfig, ctcModelDirectory: directory
+        )
+    }
+
+    /// The library's defaults are tuned for long lists of distinctive names
+    /// (drug names, earnings calls). Its "spotter rescue" pass then replaces
+    /// a word on acoustic evidence alone, with no string-similarity floor
+    /// (`defaultSpotterRescueMinSimilarity` is 0), and its own notes call it
+    /// the dominant source of over-firing on short keyword lists: with the
+    /// single keyword "Hammerspoon" it rewrote a clearly spoken "Bitwarden".
+    /// These are the short-vocab values the library recommends: the rescue
+    /// keeps recovering a mangled name that still resembles the keyword, and
+    /// short terms get a tapered boost so they can't beat a correct word.
+    private static let rescorerConfig = VocabularyRescorer.Config(
+        shortTermCbwTaperPivot: 5,
+        shortTermCbwTaperExponent: 2.0,
+        spotterRescueMinSimilarity: 0.30,
+        spotterRescueMultiWordMinSimilarity: 0.50
+    )
+
+    func rescore(_ transcript: String, timings: [TokenTiming], samples: [Float]) async throws -> String {
+        let spotted = try await spotter.spotKeywordsWithLogProbs(audioSamples: samples, customVocabulary: vocabulary)
+        guard !spotted.logProbs.isEmpty else { return transcript }
+        // Thresholds tighten with the list's size: a long list has more
+        // near-misses to fire on.
+        let config = ContextBiasingConstants.rescorerConfig(forVocabSize: vocabulary.terms.count)
+        let output = rescorer.ctcTokenRescore(
+            transcript: transcript,
+            tokenTimings: timings,
+            logProbs: spotted.logProbs,
+            frameDuration: spotted.frameDuration,
+            cbw: config.cbw,
+            minSimilarity: config.minSimilarity
+        )
+        return output.text
+    }
+}
+
+/// Observable mirror of the CTC models' state for Settings. Unlike the TDT
+/// download there is no progress: `CtcModels.download` reports none.
+@MainActor
+final class BoostModelStatus: ObservableObject {
+    static let shared = BoostModelStatus()
+
+    enum Phase: Equatable {
+        case missing
+        case working
+        case ready
+        case failed(String)
+    }
+
+    @Published private(set) var phase: Phase = ParakeetEngine.boostModelsDownloaded ? .ready : .missing
+
+    var statusText: String {
+        switch phase {
+        case .missing: return "Not downloaded"
+        case .working: return "Downloading"
+        case .ready: return "Ready"
+        case .failed: return "Failed"
+        }
+    }
+
+    func downloadIfNeeded() {
+        guard phase != .working else { return }
+        phase = .working
+        Task {
+            do {
+                try await ParakeetEngine.shared.prepareBoost()
+                phase = .ready
+            } catch {
+                phase = .failed(error.localizedDescription)
+            }
+        }
+    }
+
+    func refresh() {
+        guard phase != .working else { return }
+        phase = ParakeetEngine.boostModelsDownloaded ? .ready : .missing
     }
 }
 

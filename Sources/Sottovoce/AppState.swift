@@ -66,8 +66,13 @@ final class AppState: ObservableObject {
     private var deltaText = ""
     /// Text typed live from deltas for the current (uncommitted) item.
     private var itemTyped = ""
+    /// The deltas of the current item as the provider sent them, before the
+    /// vocabulary pipeline: the final transcript is compared against these.
+    private var itemRaw = ""
     /// Unstable in-progress utterance (Deepgram interims): preview only.
     private var interimText = ""
+    /// Filler removal and replacement rules for the current session.
+    private var pipeline: VocabularyPipeline?
 
     private let holdThreshold: CFTimeInterval = 0.30
     private let doubleTapWindow: CFTimeInterval = 0.40
@@ -227,8 +232,10 @@ final class AppState: ObservableObject {
         insertedText = ""
         deltaText = ""
         itemTyped = ""
+        itemRaw = ""
         interimText = ""
         previewText = ""
+        pipeline = Prefs.makeVocabularyPipeline(sentenceStart: true)
         sessionReady = false
         flashWork?.cancel()
         flashDone = false
@@ -276,7 +283,7 @@ final class AppState: ObservableObject {
         case .fishAudio:
             client = FishAudioClient(apiKey: key, language: Prefs.languages.first)
         case .parakeet:
-            client = ParakeetClient(languageHint: Prefs.languages.first)
+            client = ParakeetClient(languageHint: Prefs.languages.first, keywords: Prefs.transcriptionKeywords)
         }
         self.client = client
 
@@ -397,7 +404,9 @@ final class AppState: ObservableObject {
         previewText = ""
         deltaText = ""
         itemTyped = ""
+        itemRaw = ""
         interimText = ""
+        pipeline = nil
         sessionReady = false
         recordingStartedAt = nil
         recordingEndedAt = nil
@@ -410,14 +419,12 @@ final class AppState: ObservableObject {
         switch Prefs.insertionMethod {
         case .type:
             // Live dictation: deltas are typed into the frontmost app as they
-            // arrive (gpt-live-transcribe deltas are append-only).
-            var text = delta
-            if itemTyped.isEmpty, needsJoiningSpace(before: text) {
-                text = " " + text
+            // arrive (gpt-live-transcribe deltas are append-only), through the
+            // pipeline, which holds back what a rule could still change.
+            itemRaw += delta
+            if let pipeline {
+                insert(pipeline.push(delta))
             }
-            TextInserter.insert(text)
-            itemTyped += text
-            insertedText += text
         case .paste:
             deltaText += delta
         }
@@ -433,17 +440,20 @@ final class AppState: ObservableObject {
             // Deltas were already typed; the final transcript should extend
             // them — type only the missing tail. If the model revised earlier
             // text instead, the typed text stands (we can't retro-edit).
-            let typed = itemTyped.hasPrefix(" ") ? String(itemTyped.dropFirst()) : itemTyped
-            itemTyped = ""
-            if typed.isEmpty {
+            let raw = itemRaw
+            itemRaw = ""
+            if raw.isEmpty {
                 insertSegment(transcript)
-            } else if transcript.hasPrefix(typed) {
-                let tail = String(transcript.dropFirst(typed.count))
-                if !tail.isEmpty {
-                    TextInserter.insert(tail)
-                    insertedText += tail
+            } else if let pipeline {
+                if transcript.hasPrefix(raw) {
+                    let tail = String(transcript.dropFirst(raw.count))
+                    if !tail.isEmpty {
+                        insert(pipeline.push(tail))
+                    }
                 }
+                insert(pipeline.flush())
             }
+            itemTyped = ""
         case .paste:
             deltaText = ""
             insertSegment(transcript)
@@ -453,13 +463,34 @@ final class AppState: ObservableObject {
 
     private func insertSegment(_ transcript: String) {
         let segment = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !segment.isEmpty else { return }
-        var toInsert = segment
-        if needsJoiningSpace(before: segment) {
-            toInsert = " " + segment
+        guard !segment.isEmpty, let pipeline else { return }
+        insert(pipeline.process(segment))
+    }
+
+    /// Insert what the pipeline released, in order. The first text of an item
+    /// gets a joining space when the target text runs straight into it; later
+    /// deltas carry their own spacing and may even split a word, so they are
+    /// inserted verbatim.
+    private func insert(_ events: [VocabularyEvent]) {
+        for event in events {
+            switch event {
+            case .text(let text):
+                var toInsert = text
+                if itemTyped.isEmpty, needsJoiningSpace(before: text) {
+                    toInsert = " " + text
+                }
+                TextInserter.insert(toInsert)
+                itemTyped += toInsert
+                insertedText += toInsert
+            case .key(let key):
+                TextInserter.press(key)
+                // Recorded as its text so the preview and history show the
+                // break and the next word gets no joining space.
+                let typed = key == .tab ? "\t" : "\n"
+                itemTyped += typed
+                insertedText += typed
+            }
         }
-        TextInserter.insert(toInsert)
-        insertedText += toInsert
     }
 
     private func needsJoiningSpace(before text: String) -> Bool {
@@ -468,7 +499,7 @@ final class AppState: ObservableObject {
     }
 
     private func updatePreview() {
-        var combined = insertedText + deltaText
+        var combined = insertedText + (pipeline?.pending ?? "") + deltaText
         if !interimText.isEmpty {
             combined += (combined.isEmpty ? "" : " ") + interimText
         }
