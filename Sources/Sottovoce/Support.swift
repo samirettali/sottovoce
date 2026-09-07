@@ -263,7 +263,7 @@ enum Prefs {
             PrefKey.transcriptionDelay: "",
             PrefKey.removeFillers: true,
             PrefKey.fillerWords: "ehm, uhm, um, uh",
-            PrefKey.vocabularyRules: Data("[]".utf8),
+            PrefKey.vocabularyRules: (try? JSONEncoder().encode(VocabularyRule.defaultCommands)) ?? Data("[]".utf8),
         ])
     }
 

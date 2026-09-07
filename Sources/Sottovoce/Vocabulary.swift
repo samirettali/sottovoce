@@ -8,14 +8,82 @@ import Foundation
 /// block). Matching is case-insensitive, on whole words, and a phrase may span
 /// several words.
 struct VocabularyRule: Codable, Identifiable, Equatable {
+    enum Kind: String, Codable, CaseIterable, Identifiable {
+        /// Insert `replacement` in place of the phrase.
+        case replace
+        /// Press `key` instead of typing the phrase: a voice command.
+        case key
+
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .replace: return "Replace with"
+            case .key: return "Press"
+            }
+        }
+    }
+
     var id = UUID()
     var phrase = ""
+    var kind = Kind.replace
     var replacement = ""
+    var key = KeyCommand.return
+
+    init(id: UUID = UUID(), phrase: String = "", replacement: String = "") {
+        self.id = id
+        self.phrase = phrase
+        self.replacement = replacement
+    }
+
+    init(phrase: String, key: KeyCommand) {
+        self.phrase = phrase
+        self.kind = .key
+        self.key = key
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, phrase, kind, replacement, key }
+
+    // Rules saved before voice commands existed have no `kind` or `key`.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        phrase = try container.decode(String.self, forKey: .phrase)
+        kind = try container.decodeIfPresent(Kind.self, forKey: .kind) ?? .replace
+        replacement = try container.decodeIfPresent(String.self, forKey: .replacement) ?? ""
+        key = try container.decodeIfPresent(KeyCommand.self, forKey: .key) ?? .return
+    }
+
+    /// The it/en voice commands every install starts with.
+    static let defaultCommands: [VocabularyRule] = [
+        VocabularyRule(phrase: "a capo", key: .return),
+        VocabularyRule(phrase: "nuovo paragrafo", key: .doubleReturn),
+        VocabularyRule(phrase: "new line", key: .return),
+        VocabularyRule(phrase: "new paragraph", key: .doubleReturn),
+    ]
+}
+
+/// A keystroke a voice command synthesises instead of text.
+enum KeyCommand: String, Codable, CaseIterable, Identifiable {
+    case `return`
+    case doubleReturn
+    case tab
+    case commandReturn
+
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .return: return "Return"
+        case .doubleReturn: return "Return twice"
+        case .tab: return "Tab"
+        case .commandReturn: return "⌘ Return"
+        }
+    }
 }
 
 /// What the pipeline produces for insertion, in order.
 enum VocabularyEvent: Equatable {
     case text(String)
+    case key(KeyCommand)
 }
 
 /// Local text cleanup between the provider and insertion: filler removal and
@@ -29,8 +97,13 @@ enum VocabularyEvent: Equatable {
 /// final. Paste mode simply pushes the whole transcript and flushes.
 final class VocabularyPipeline {
     private struct Compiled {
+        enum Output {
+            case text(String)
+            case key(KeyCommand)
+        }
+
         let words: [String]
-        let replacement: String
+        let output: Output
     }
 
     private let rules: [Compiled]
@@ -53,12 +126,15 @@ final class VocabularyPipeline {
         for rule in rules {
             let words = Self.words(of: rule.phrase)
             guard !words.isEmpty else { continue }
-            compiled.append(Compiled(words: words, replacement: rule.replacement))
+            switch rule.kind {
+            case .replace: compiled.append(Compiled(words: words, output: .text(rule.replacement)))
+            case .key: compiled.append(Compiled(words: words, output: .key(rule.key)))
+            }
         }
         for filler in fillers {
             let words = Self.words(of: filler)
             guard !words.isEmpty else { continue }
-            compiled.append(Compiled(words: words, replacement: ""))
+            compiled.append(Compiled(words: words, output: .text("")))
         }
         // Longest phrase first, so "next js runtime" wins over "next js".
         self.rules = compiled.sorted { $0.words.count > $1.words.count }
@@ -110,8 +186,8 @@ final class VocabularyPipeline {
             // A phrase of `holdback` words starting here may not have fully
             // arrived; wait for the next delta rather than commit its head.
             if !final, i + holdback > complete { break }
-            if let (count, replacement) = match(tokens, at: i, limit: complete) {
-                emit(replacement, over: tokens[i..<i + count], into: &out)
+            if let (count, output) = match(tokens, at: i, limit: complete) {
+                emit(output, over: tokens[i..<i + count], into: &out)
                 i += count
             } else {
                 emit(tokens[i], into: &out)
@@ -129,7 +205,7 @@ final class VocabularyPipeline {
         return out.events
     }
 
-    private func match(_ tokens: [Token], at index: Int, limit: Int) -> (Int, String)? {
+    private func match(_ tokens: [Token], at index: Int, limit: Int) -> (Int, Compiled.Output)? {
         for rule in rules {
             let count = rule.words.count
             guard index + count <= limit else { continue }
@@ -138,7 +214,7 @@ final class VocabularyPipeline {
                 hit = false
                 break
             }
-            if hit { return (count, rule.replacement) }
+            if hit { return (count, rule.output) }
         }
         return nil
     }
@@ -156,6 +232,10 @@ final class VocabularyPipeline {
                 events.append(.text(text))
             }
         }
+
+        mutating func key(_ key: KeyCommand) {
+            events.append(.key(key))
+        }
     }
 
     private func emit(_ token: Token, into out: inout Emitter) {
@@ -168,8 +248,21 @@ final class VocabularyPipeline {
         sentenceStart = Self.endsSentence(token.word)
     }
 
-    private func emit(_ replacement: String, over tokens: ArraySlice<Token>, into out: inout Emitter) {
+    private func emit(_ output: Compiled.Output, over tokens: ArraySlice<Token>, into out: inout Emitter) {
         guard let first = tokens.first, let last = tokens.last else { return }
+        let replacement: String
+        switch output {
+        case .key(let key):
+            // The keystroke replaces the phrase and the whitespace around it:
+            // nothing should sit between the previous word and the Return.
+            _ = lead(of: first)
+            out.key(key)
+            capitalizeNext = false
+            dropNextLead = true
+            return
+        case .text(let text):
+            replacement = text
+        }
         if replacement.isEmpty {
             // A removed filler leaves the sentence where it was; if it opened
             // one, the next word takes over that role.

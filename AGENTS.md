@@ -210,9 +210,18 @@ shows the current mode.
   - Fillers are rules with an empty replacement: the matched words go, a
     filler that opened the text takes the next word's leading space with it,
     and one that opened a sentence hands its capital to the next word.
-  - Rules are JSON in UserDefaults (`vocabularyRules`); fillers are a
-    comma-separated string (`fillerWords`) behind the `removeFillers` toggle,
-    on by default with "ehm, uhm, um, uh".
+  - **Voice commands** are rules of kind `key`: the phrase is dropped
+    together with the whitespace around it and `TextInserter.press`
+    synthesises the keystroke (Return, Return twice, Tab, ⌘Return) with the
+    same marked CGEvents as ⌘V. `AppState` records a newline (or tab) in
+    `insertedText` so the preview and history show the break and the next
+    word gets no joining space. Every install starts with "a capo" / "new
+    line" → Return and "nuovo paragrafo" / "new paragraph" → Return twice,
+    seeded through `registerDefaults` so deleting them sticks.
+  - Rules are JSON in UserDefaults (`vocabularyRules`); rules saved before
+    commands existed decode with `kind` defaulting to `replace`. Fillers are
+    a comma-separated string (`fillerWords`) behind the `removeFillers`
+    toggle, on by default with "ehm, uhm, um, uh".
   - `swift test` covers the pipeline (`Tests/SottovoceTests`); it is the only
     test target, added for this because the holdback is easy to get subtly
     wrong and impossible to check by dictating.

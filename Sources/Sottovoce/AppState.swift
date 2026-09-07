@@ -482,6 +482,13 @@ final class AppState: ObservableObject {
                 TextInserter.insert(toInsert)
                 itemTyped += toInsert
                 insertedText += toInsert
+            case .key(let key):
+                TextInserter.press(key)
+                // Recorded as its text so the preview and history show the
+                // break and the next word gets no joining space.
+                let typed = key == .tab ? "\t" : "\n"
+                itemTyped += typed
+                insertedText += typed
             }
         }
     }

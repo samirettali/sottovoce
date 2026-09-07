@@ -30,6 +30,18 @@ enum TextInserter {
         }
     }
 
+    /// A voice command's keystroke, synthesised like the ⌘V of a paste.
+    static func press(_ command: KeyCommand) {
+        switch command {
+        case .return: postKeystroke(keyCode: 36, flags: [])
+        case .doubleReturn:
+            postKeystroke(keyCode: 36, flags: [])
+            postKeystroke(keyCode: 36, flags: [])
+        case .tab: postKeystroke(keyCode: 48, flags: [])
+        case .commandReturn: postKeystroke(keyCode: 36, flags: .maskCommand)
+        }
+    }
+
     // MARK: - Paste
 
     private static func paste(_ text: String) {

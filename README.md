@@ -58,7 +58,8 @@ trade-off.
 What a provider keeps mishearing, fix once in Settings → Vocabulary: filler
 words are dropped, and "phrase → replacement" rules rewrite the transcript
 before it is inserted, whatever the provider. A rule whose replacement is a
-whole block works as a snippet.
+whole block works as a snippet, and a rule that presses a key is a voice
+command: "a capo" and "new line" press Return out of the box.
 
 Dictations don't reach your clipboard unless you ask for it: pasting borrows the
 clipboard for a moment and puts back what was there, and marks the text so

@@ -10,8 +10,33 @@ final class VocabularyPipelineTests: XCTestCase {
         events.map { event -> String in
             switch event {
             case .text(let text): return text
+            case .key(let key): return "<\(key.rawValue)>"
             }
         }.joined()
+    }
+
+    // MARK: Voice commands
+
+    func testCommandReplacesThePhraseAndTheSpacesAroundIt() {
+        let pipeline = VocabularyPipeline(rules: VocabularyRule.defaultCommands, fillers: [])
+        XCTAssertEqual(
+            pipeline.process("riga uno a capo riga due nuovo paragrafo, riga tre"),
+            [.text("riga uno"), .key(.return), .text("riga due"), .key(.doubleReturn), .text("riga tre")]
+        )
+    }
+
+    func testCommandAtTheEndOfLiveTextWaitsForTheWholePhrase() {
+        let pipeline = VocabularyPipeline(rules: VocabularyRule.defaultCommands, fillers: [])
+        XCTAssertEqual(pipeline.push("riga uno a "), [.text("riga uno")])
+        XCTAssertEqual(pipeline.push("capo riga"), [.key(.return)])
+        XCTAssertEqual(pipeline.flush(), [.text("riga")])
+    }
+
+    func testRulesSavedWithoutAKindStillDecode() throws {
+        let data = Data(#"[{"id":"6BA7B810-9DAD-11D1-80B4-00C04FD430C8","phrase":"a","replacement":"b"}]"#.utf8)
+        let rules = try JSONDecoder().decode([VocabularyRule].self, from: data)
+        XCTAssertEqual(rules.first?.kind, .replace)
+        XCTAssertEqual(rules.first?.replacement, "b")
     }
 
     // MARK: Whole transcript
