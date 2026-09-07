@@ -57,7 +57,11 @@ shows the current mode.
   (`POST /v1/asr`; **no realtime ASR** — their WebSocket API is TTS-only and
   `s2.1-pro` is a TTS model; OpenRouter likewise has no realtime STT).
   Per-provider API keys are separate Keychain accounts under the same
-  service. Delay/keywords/context-prompt options are OpenAI-only.
+  service. Delay and the context prompt are OpenAI-only. Keywords are one
+  field sent wherever the API takes a vocabulary: OpenAI `keywords`, Gemini
+  `customVocabulary`/`custom_vocabulary` (1000 max), Deepgram `keyterm`;
+  Groq folds them into the Whisper prompt (a weak bias, not a vocabulary);
+  Fish Audio and Parakeet ignore them.
 - **On-device provider** (`parakeet`): Parakeet TDT 0.6B v3 on CoreML/ANE via
   [FluidAudio](https://github.com/FluidInference/FluidAudio). Chosen over
   Whisper (WhisperKit) because it beats large-v3 on accuracy at a quarter of
