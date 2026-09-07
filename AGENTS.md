@@ -61,7 +61,8 @@ shows the current mode.
   field sent wherever the API takes a vocabulary: OpenAI `keywords`, Gemini
   `customVocabulary`/`custom_vocabulary` (1000 max), Deepgram `keyterm`;
   Groq folds them into the Whisper prompt (a weak bias, not a vocabulary);
-  Fish Audio and Parakeet ignore them.
+  Parakeet scores them against the audio with a second model (see the
+  on-device provider); Fish Audio ignores them.
 - **On-device provider** (`parakeet`): Parakeet TDT 0.6B v3 on CoreML/ANE via
   [FluidAudio](https://github.com/FluidInference/FluidAudio). Chosen over
   Whisper (WhisperKit) because it beats large-v3 on accuracy at a quarter of
@@ -97,10 +98,28 @@ shows the current mode.
     `deliver`/`fail` so on-device providers reuse the buffering without the
     HTTP path. No live preview; ~110× realtime, so a normal dictation resolves
     in a fraction of a second.
-  - Keywords/context-prompt don't apply: Parakeet has no prompt conditioning.
-    FluidAudio does ship CTC keyword spotting + vocabulary rescoring
-    (`CustomVocabularyContext`), which is the path to wire up if the Keywords
-    field should ever work here.
+  - **Keywords work through a second model** (`VocabularyBoost` in
+    `LocalASR.swift`), not through prompting: a transducer cannot be asked
+    how likely a given word is at a given point. FluidAudio's Parakeet CTC
+    110M head gives per-frame posteriors any term can be aligned against, so
+    the TDT transcript is kept and `VocabularyRescorer.ctcTokenRescore` swaps
+    a word for a keyword only when the audio supports it. Greedy CTC
+    decoding is useless by design (~113% WER per the library's own note):
+    the models score, they never transcribe. This is the library's batch
+    path (`TranscribeCommand.runBatch` in its CLI), so `ParakeetEngine` stays
+    batch and nothing about insertion changes; the sliding-window manager is
+    only needed for streaming.
+    - The CTC models are a **separate download** (Settings → Providers,
+      second section), cached by FluidAudio next to the TDT ones; without
+      them keywords are silently ignored, and with an empty Keywords field
+      the pass never runs. `CtcModels.download` reports no progress, hence
+      the spinner. Any failure in the pass logs and returns the plain
+      transcript: a boost must never cost a dictation.
+    - The boost is built for one keyword list and kept resident with the
+      models; a changed list rebuilds it on the next dictation. Thresholds
+      come from `ContextBiasingConstants.rescorerConfig(forVocabSize:)`,
+      which tightens as the list grows.
+    - The context prompt still doesn't apply.
   - `TranscriptionProvider.requiresAPIKey` gates the Keychain check in
     `AppState.startSession` and the first-run "open Settings" nudge.
 - **Deepgram delta semantics**: interims are *revisions*, not append-only

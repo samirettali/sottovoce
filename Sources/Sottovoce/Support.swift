@@ -147,7 +147,7 @@ enum TranscriptionProvider: String, CaseIterable, Identifiable {
                 livePreview: false,
                 codeSwitching: true,
                 languageHints: "One or auto",
-                keywords: false,
+                keywords: true,
                 contextPrompt: false,
                 delayTuning: false,
                 pricing: "Free"

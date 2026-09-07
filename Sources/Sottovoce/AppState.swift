@@ -283,7 +283,7 @@ final class AppState: ObservableObject {
         case .fishAudio:
             client = FishAudioClient(apiKey: key, language: Prefs.languages.first)
         case .parakeet:
-            client = ParakeetClient(languageHint: Prefs.languages.first)
+            client = ParakeetClient(languageHint: Prefs.languages.first, keywords: Prefs.transcriptionKeywords)
         }
         self.client = client
 

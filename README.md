@@ -53,7 +53,9 @@ Everything else is optional: dictation key, overlay corner, insertion method
 (simulated typing vs. paste), whether each dictation stays on the clipboard,
 sounds, pausing media players while you dictate, and language hints. OpenAI
 additionally accepts a context prompt, literal keywords, and a latency/accuracy
-trade-off.
+trade-off. Keywords also reach the on-device model, through a second small
+model downloaded from Settings → Providers that checks each keyword against
+the audio.
 
 What a provider keeps mishearing, fix once in Settings → Vocabulary: filler
 words are dropped, and "phrase → replacement" rules rewrite the transcript

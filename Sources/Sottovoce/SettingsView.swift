@@ -7,6 +7,7 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject private var app = AppState.shared
     @ObservedObject private var localModel = LocalModelStatus.shared
+    @ObservedObject private var boostModel = BoostModelStatus.shared
 
     @AppStorage(PrefKey.provider) private var providerRaw = TranscriptionProvider.openai.rawValue
     @State private var apiKey = ""
@@ -122,6 +123,7 @@ struct SettingsView: View {
                 apiKeySection
             } else {
                 localModelSection
+                boostModelSection
             }
         }
         .formStyle(.grouped)
@@ -131,6 +133,7 @@ struct SettingsView: View {
             apiKey = loadedKey
             apiKeySaved = !loadedKey.isEmpty
             localModel.refresh()
+            boostModel.refresh()
             // Switching to the on-device provider should not leave the first
             // dictation waiting for a load that could have started here.
             app.preloadLocalModelIfNeeded()
@@ -224,6 +227,54 @@ struct SettingsView: View {
             .frame(height: Self.localModelRowHeight, alignment: .center)
         } footer: {
             Text("Runs entirely on this Mac — no API key, no network, nothing leaves the machine. The model is about 470 MB and is downloaded once to Application Support. Requires Apple Silicon; it transcribes on the Neural Engine when you stop dictating.")
+        }
+    }
+
+    /// Same shape as `localModelSection`, for the second download the Keywords
+    /// field needs on-device. Optional: without it dictation works, keywords
+    /// are just ignored.
+    private var boostModelSection: some View {
+        Section {
+            HStack(spacing: 8) {
+                Text("Keyword boost (Parakeet CTC 110M)")
+                Spacer(minLength: 8)
+                Text(boostModel.statusText)
+                    .foregroundStyle(boostModel.phase == .ready ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
+                    .font(.callout)
+            }
+            Group {
+                switch boostModel.phase {
+                case .missing:
+                    Button("Download") { boostModel.downloadIfNeeded() }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                case .ready:
+                    Text("Keywords from the Transcription tab are matched against the audio")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                case .working:
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Downloading")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                case .failed(let message):
+                    HStack(spacing: 8) {
+                        Button("Retry") { boostModel.downloadIfNeeded() }
+                        Text(message)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .lineLimit(2)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .frame(height: Self.localModelRowHeight, alignment: .center)
+        } footer: {
+            Text("The main model cannot take keywords. This second, smaller model scores each keyword against what was said, so a name the main model misheard is corrected when the audio supports it. Only used when the Keywords field is not empty.")
         }
     }
 
@@ -386,7 +437,7 @@ struct SettingsView: View {
         } header: {
             Text("Transcription")
         } footer: {
-            Text("Delay trades latency for accuracy (OpenAI only). Keywords (comma-separated) help with product names and acronyms — used by OpenAI, Gemini, Deepgram and Groq; what they still get wrong, fix in Vocabulary. The context prompt goes to OpenAI and Groq. Languages: Deepgram and OpenAI handle several; Groq, Fish Audio and On-device take only the first, so leave the field empty with those for auto-detection. Changes apply from the next dictation.")
+            Text("Delay trades latency for accuracy (OpenAI only). Keywords (comma-separated) help with product names and acronyms — used by OpenAI, Gemini, Deepgram and Groq, and on-device once the keyword boost is downloaded; what they still get wrong, fix in Vocabulary. The context prompt goes to OpenAI and Groq. Languages: Deepgram and OpenAI handle several; Groq, Fish Audio and On-device take only the first, so leave the field empty with those for auto-detection. Changes apply from the next dictation.")
         }
     }
 
