@@ -119,6 +119,14 @@ shows the current mode.
       models; a changed list rebuilds it on the next dictation. Thresholds
       come from `ContextBiasingConstants.rescorerConfig(forVocabSize:)`,
       which tightens as the list grows.
+    - **The library defaults over-fire on short lists.** Its "spotter
+      rescue" replaces a word on acoustic evidence alone, with no
+      string-similarity floor; with the single keyword "Hammerspoon" it
+      rewrote a clearly spoken "Bitwarden". `VocabularyBoost.rescorerConfig`
+      applies the short-vocab values the library's own notes recommend
+      (cbw taper pivot 5 / exponent 2, rescue floors 0.30 single-word / 0.50
+      multi-word). A name the TDT mangled still gets recovered as long as
+      it resembles the keyword; an unrelated word no longer does.
     - The context prompt still doesn't apply.
   - `TranscriptionProvider.requiresAPIKey` gates the Keychain check in
     `AppState.startSession` and the first-run "open Settings" nudge.

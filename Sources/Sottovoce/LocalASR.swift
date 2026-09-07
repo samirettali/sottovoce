@@ -174,9 +174,25 @@ private struct VocabularyBoost {
         self.vocabulary = vocabulary
         self.spotter = spotter
         self.rescorer = try await VocabularyRescorer.create(
-            spotter: spotter, vocabulary: vocabulary, ctcModelDirectory: directory
+            spotter: spotter, vocabulary: vocabulary, config: Self.rescorerConfig, ctcModelDirectory: directory
         )
     }
+
+    /// The library's defaults are tuned for long lists of distinctive names
+    /// (drug names, earnings calls). Its "spotter rescue" pass then replaces
+    /// a word on acoustic evidence alone, with no string-similarity floor
+    /// (`defaultSpotterRescueMinSimilarity` is 0), and its own notes call it
+    /// the dominant source of over-firing on short keyword lists: with the
+    /// single keyword "Hammerspoon" it rewrote a clearly spoken "Bitwarden".
+    /// These are the short-vocab values the library recommends: the rescue
+    /// keeps recovering a mangled name that still resembles the keyword, and
+    /// short terms get a tapered boost so they can't beat a correct word.
+    private static let rescorerConfig = VocabularyRescorer.Config(
+        shortTermCbwTaperPivot: 5,
+        shortTermCbwTaperExponent: 2.0,
+        spotterRescueMinSimilarity: 0.30,
+        spotterRescueMultiWordMinSimilarity: 0.50
+    )
 
     func rescore(_ transcript: String, timings: [TokenTiming], samples: [Float]) async throws -> String {
         let spotted = try await spotter.spotKeywordsWithLogProbs(audioSamples: samples, customVocabulary: vocabulary)
